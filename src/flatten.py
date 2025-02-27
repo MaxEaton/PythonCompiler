@@ -41,8 +41,8 @@ def flatten(node):
                     ctx=Store()
                 )],
                 value=value
-            ))# create temp variable
-            left = Name( 
+            ))
+            left = Name(
                 id=f"tmp{flatten.count}",
                 ctx=Load()
             )

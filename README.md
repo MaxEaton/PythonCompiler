@@ -6,8 +6,8 @@ This project is a compiler for a growing subset of Python, designed to parse, an
 
 ## Features
 
-* **AST-based Parsing**  
-  Uses Python's `ast` module to parse source code into an Abstract Syntax Tree for easy analysis and evaluation.
+* **Custom Parsing with Lark**  
+  Uses Lark to implement a custom lexer and parser for the Python subset, enabling precise syntax control and incremental grammar development. 
 
 * **Unary Operations**  
   Supports unary minus operator (`-x`).

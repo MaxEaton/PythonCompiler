@@ -6,11 +6,17 @@ if __name__ == "__main__":
     path_py = sys.argv[1]
     if not path_py.endswith('.py'):
         raise Exception(f"compile: argument not a valid python file")
-
+    
     prog_py = ""
-    with open(path_py) as file: 
-        prog_py = file.read()
-    tree = ast.parse(prog_py)
+    with open(path_py) as file:
+            prog_py = file.read()
+    
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "grammar.lark"), 'r') as file_lark:
+            grammar = file_lark.read()
+        
+    parser = Lark(grammar, parser="lalr", start = "module", debug=True, transformer=ToAst())
+    tree = parser.parse(prog_py)
+    
     tree = verify(tree)
     tree = uniqify(tree)
     

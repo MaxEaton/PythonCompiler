@@ -1,0 +1,27 @@
+start: module
+
+module: (statement COMMENT? | COMMENT)*
+
+statement: "print" "(" expression ")"    -> printer
+         | NAME "=" expression           -> assign
+         | expression
+
+expression: add_expr
+
+add_expr: add_expr "+" neg_expr          -> add
+        | neg_expr
+
+neg_expr: "-" neg_expr                   -> neg
+        | term
+
+term: "(" expression ")"               
+    | NAME
+    | DECIMAL_INT
+    | "eval" "(" "input" "(" ")" ")"     -> evalinput
+
+%import common.CNAME                     -> NAME
+%import common.INT                       -> DECIMAL_INT
+%import common.WS
+COMMENT: /#.*/
+%ignore COMMENT
+%ignore WS
