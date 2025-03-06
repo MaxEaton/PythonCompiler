@@ -1,5 +1,6 @@
 #!/usr/bin/env python3.10
 
+
 import os
 import copy
 import ast
@@ -22,3 +23,8 @@ from flatten import *
 from generate_s import *
 from generate_p0 import *
 from parse import *
+from s_ir import *
+from liveness import *
+from interference import *
+from coloring import *
+from spillage import *

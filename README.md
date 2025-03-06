@@ -16,10 +16,13 @@ This project is a compiler for a growing subset of Python, designed to parse, an
   Supports binary addition (`x + y`).
 
 * **Variables**  
-  Allows defining and using variables through assignments and expressions.
+Allows defining and using variables through assignments and expressions.
 
 * **Input and Output**  
   Supports `print()` statements for output and `eval(input())` for interactive input evaluation.
+
+* **Assigning Homes**  
+  Implements liveness analysis and interference graph construction, followed by a basic graph coloring algorithm to allocate registers efficiently and minimize stack allocations. 
 
 ## Getting Started
 

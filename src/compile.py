@@ -14,7 +14,7 @@ if __name__ == "__main__":
     with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "grammar.lark"), 'r') as file_lark:
             grammar = file_lark.read()
         
-    parser = Lark(grammar, parser="lalr", start = "module", debug=True, transformer=ToAst())
+    parser = Lark(grammar, parser="lalr", start="module", debug=True, transformer=ToAst())
     tree = parser.parse(prog_py)
     
     tree = verify(tree)
@@ -30,7 +30,28 @@ if __name__ == "__main__":
     except Exception as e:
         print("Error writing file:", e)        
     
-    prog_s = generate_s(tree)
+    s_ir_arr = s_ir(tree)
+    
+    tmps_arr = []
+    prev_set = {
+        "%eax": 0,
+        "%ecx": 1,
+        "%edx": 2,
+        "%ebx": 3,
+        "%edi": 4,
+        "%esi": 5,
+    }
+    while True:
+        liveness_arr = liveness(s_ir_arr)
+        interference_graph = interference(s_ir_arr, liveness_arr)
+        color_dict = coloring(interference_graph, tmps_arr, prev_set)
+        for key, value in color_dict.items():
+            if value >= 6: prev_set[key] = value
+        s_ir_arr, tmps_arr_ = spillage(s_ir_arr, color_dict, len(tmps_arr))
+        if not tmps_arr_: break
+        tmps_arr.extend(tmps_arr_)
+        
+    prog_s = generate_s(s_ir_arr, color_dict)
     path_s = (path_py)[:-3] + ".s"
     try:
         with open(path_s, "w") as file_s:

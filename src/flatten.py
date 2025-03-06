@@ -12,9 +12,8 @@ def flatten(node):
     if isinstance(node, Module):
         # intialize module to store temp assignments
         flatten.count = 0
-        flatten.module = ast.parse("") 
-        # flatten each statement in the module
-        for x in node.body: flatten.module.body.append(flatten(x)) 
+        flatten.module = ast.parse("")
+        for x in node.body: flatten.module.body.append(flatten(x))
         return flatten.module
     elif isinstance(node, Assign):
         return Assign(
@@ -32,8 +31,7 @@ def flatten(node):
     elif isinstance(node, BinOp):
         left = node.left
         right = node.right
-        # if left operand is non-simple, flatten and store in temp variable
-        if not isinstance(left, (Constant, Name)): 
+        if not isinstance(left, (Constant, Name)):
             value = flatten(left)
             flatten.module.body.append(Assign(
                 targets=[Name(
@@ -47,8 +45,7 @@ def flatten(node):
                 ctx=Load()
             )
             flatten.count += 1
-        # if right operand is non-simple, flatten and store in temp variable
-        if not isinstance(right, (Constant, Name)): 
+        if not isinstance(right, (Constant, Name)):
             value = flatten(right)
             flatten.module.body.append(Assign(
                 targets=[Name(
@@ -57,7 +54,7 @@ def flatten(node):
                 )],
                 value=value
             ))
-            right = Name( 
+            right = Name(
                 id=f"tmp{flatten.count}",
                 ctx=Load()
             )
@@ -69,8 +66,7 @@ def flatten(node):
         )
     elif isinstance(node, UnaryOp):
         operand = node.operand
-        # if operand is non-simple, flatten and store in temp variable
-        if not isinstance(operand, (Constant, Name)): 
+        if not isinstance(operand, (Constant, Name)):
             value = flatten(operand)
             flatten.module.body.append(Assign(
                 targets=[Name(
