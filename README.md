@@ -10,10 +10,13 @@ This project is a compiler for a growing subset of Python, designed to parse, an
   Uses Lark to implement a custom lexer and parser for the Python subset, enabling precise syntax control and incremental grammar development. 
 
 * **Unary Operations**  
-  Supports unary minus operator (`-x`).
+  Supports minus operator (`-x`) and not operator (`not x`).
 
 * **Binary Operations**  
-  Supports binary addition (`x + y`).
+  Supports addition (`x + y`) and logical operators (`x and/or y`) with short circuiting.
+
+* **Ternary Operations**  
+  Supports the ternary conditional expression (`x if y else z`) by desugaring it into an equivalent `if/else` statement.
 
 * **Variables**  
 Allows defining and using variables through assignments and expressions.
@@ -23,6 +26,12 @@ Allows defining and using variables through assignments and expressions.
 
 * **Assigning Homes**  
   Implements liveness analysis and interference graph construction, followed by a basic graph coloring algorithm to allocate registers efficiently and minimize stack allocations. 
+
+* **Comparators**  
+  Supports equality comparisons wrapped in `int(...)` (`int(x ==/!= y)`), with support currently limited to integer values.
+
+* **Basic Control**  
+  Supports `if/else` statements and `while` loops, including support for `break` and `else` clauses within loops. 
 
 ## Getting Started
 
@@ -55,12 +64,14 @@ gcc -m32 -g your_program.s runtime/libpyyruntime.a -lm -o your_program
 
 ## Architecture
 
-1. The source code is transformed into an abstract syntax tree (AST) using Python's `ast` library.
+1. The source code is parsed using a custom grammar implemented with Lark, producing an abstract syntax tree.
 2. The AST is verified to be valid within the implemented subset.
-3. Common tokens in the AST are made unique for easier manipulation.
+3. Logical operators are desugared into control blocks to support short circuiting and loops are desugared into infinite loops with a conditional break. 
 4. Complex statements are flattened into simple statements within the AST.
 5. The flattened AST is converted into Python code for intermediate validation.
-6. The flattened AST is converted into x86 assembly.
+6. Liveness analysis is performed and an interference graph is constructed. 
+7. The interference graph is colored using a naive register allocation algorithm, and spill code is inserted as needed.  
+8. The flattened and transformed program is converted into x86 assembly using the assigned register locations.
 
 ## Examples
 
@@ -83,4 +94,49 @@ print(tmp0)
 
 # output
 -17
+```
+
+### py1
+
+```python
+# source
+x = eval(input())
+y = eval(input())
+while x and y:
+    print(-x if int(x == y) else y)
+    x = x + -1
+    y = y + -2
+
+# flattened
+s_x = eval(input())
+s_y = eval(input())
+while 1:
+    t_desugar_1 = s_x
+    if t_desugar_1:
+        t_desugar_2 = s_y
+    else:
+        t_desugar_2 = t_desugar_1
+    t_desugar_0 = t_desugar_2
+    if t_desugar_0:
+        t_flatten_0 = int(s_x == s_y)
+        if t_flatten_0:
+            t_desugar_3 = - s_x
+        else:
+            t_desugar_3 = s_y
+        print(t_desugar_3)
+        t_flatten_1 = - 1
+        s_x = s_x + t_flatten_1
+        t_flatten_2 = - 2
+        s_y = s_y + t_flatten_2
+    else:
+        break
+
+# input
+5
+6
+
+# output
+6
+-4
+2
 ```

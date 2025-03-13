@@ -2,22 +2,29 @@
 
 from utils import *
 
-def spillage(s_ir_arr, color_dict, tmpi):
+def spillage(blocks, color_dict):
     '''
-    Takes s_ir, the color dictionary, and a temp counter.
+    Creates new temps upon memory to memory operations. 
 
-    :param s_ir_arr: array of instructions in the s_ir
-    :param color_dict: dictionary of each variable's coloring
-    :param tmpi: counter for temp variable assignment
-    :return: s_ir and array of temp variables
+    :param blocks: list of Block objects representing the basic blocks in the program
+    :param color_dict: mapping of variables to register assignment
+    :return: updated blocks with spillage code
+    :return: list of added temporary variables
     '''
+    global t_spill_cnt
     tmps_arr_ = []
-    for i, line in enumerate(s_ir_arr):
-        if line[0] in ["addl", "movl"] and line[1] in color_dict and color_dict[line[1]] >= 6 and line[2] in color_dict and color_dict[line[2]] >= 6: #if both registers are going to be spilled to the stack
-            s_ir_arr.insert(i, ["movl", line[1], f"ir_tmp{tmpi}"])
-            s_ir_arr[i+1][1] = f"ir_tmp{tmpi}"
-            tmps_arr_.append(f"ir_tmp{tmpi}")
-            tmpi += 1
-            i += 1
+    for i in range(len(blocks)):
+        block = blocks[i]
+        for j, line in enumerate(block.lines):
+            s_ir_inst = s_ir_insts.get(line[0])
+            if s_ir_inst and len(s_ir_inst[4]) == 2:
+                op1 = line[s_ir_inst[4][0]]
+                op2 = line[s_ir_inst[4][1]]
+                if op1 in color_dict and color_dict[op1] >= 6 and op2 in color_dict and color_dict[op2] >= 6:
+                    block.lines.insert(j, ["movl", line[1], f"t_spill_{t_spill_cnt}"])
+                    block.lines[j+1][1] = f"t_spill_{t_spill_cnt}"
+                    tmps_arr_.append(f"t_spill_{t_spill_cnt}")
+                    t_spill_cnt += 1
+                    j += 1
     
-    return s_ir_arr, tmps_arr_
+    return blocks, tmps_arr_

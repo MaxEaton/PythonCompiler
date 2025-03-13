@@ -17,10 +17,8 @@ def verify(node):
         verify(node.value)
     elif isinstance(node, Expr):
         verify(node.value)
-    elif isinstance(node, Constant):
-        pass
     elif isinstance(node, Name):
-        node.id = f"s_{node.id}" if node.id not in functions else node.id
+        node.id = f"s_{node.id}" if node.id not in [*functions, *keywords] else node.id
     elif isinstance(node, BinOp):
         verify(node.left)
         verify(node.op)
@@ -49,13 +47,31 @@ def verify(node):
                     verify(node.args[0].args[0])
                 else:
                     raise Exception(f"verify: too many arguments {node.args[0].func.id}")
-    elif isinstance(node, Add):
-        pass
-    elif isinstance(node, USub):
-        pass
-    elif isinstance(node, Load):
-        pass
-    elif isinstance(node, Store):
+    elif isinstance(node, BoolOp):
+        if len(node.values) > 2:
+            values = node.values[1:]
+            node.values = [
+                node.values[0],
+                BoolOp(
+                    op=node.op,
+                    values=values
+                )
+            ]
+        for value in node.values: verify(value)
+        verify(node.op)
+    elif isinstance(node, IfExp):
+        verify(node.test)
+        verify(node.body)
+        verify(node.orelse)
+    elif isinstance(node, Compare):
+        verify(node.left)
+        for op in node.ops: verify(op)
+        for comparator in node.comparators: verify(comparator)
+    elif isinstance(node, (If, While)):
+        verify(node.test)
+        for line in node.body: verify(line)
+        for line in node.orelse: verify(line)
+    elif isinstance(node, (Constant, Add, USub, Load, Store, And, Or, Not, Eq, NotEq, Break)):
         pass
     else:
         raise Exception(f"verify: unrecognized AST node {node}")

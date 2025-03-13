@@ -8,29 +8,26 @@ if __name__ == "__main__":
         raise Exception(f"compile: argument not a valid python file")
     
     prog_py = ""
-    with open(path_py) as file:
-            prog_py = file.read()
+    with open(path_py) as file: 
+        for line in file.read().split('\n'):
+            prog_py += line.split('#', 1)[0] + "\n"
     
-    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "grammar.lark"), 'r') as file_lark:
-            grammar = file_lark.read()
-        
-    parser = Lark(grammar, parser="lalr", start="module", debug=True, transformer=ToAst())
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "grammar.lark"), 'r') as file_lark: 
+        prog_lark = file_lark.read()
+    parser = Lark(prog_lark, parser="lalr", start="module", debug=True, transformer=ToAst(), postlex=PyIndenter())
+    
     tree = parser.parse(prog_py)
-    
     tree = verify(tree)
-    tree = uniqify(tree)
-    
+    tree = desugar(tree)
     tree = flatten(tree)
-    prog_p0 = generate_p0(tree)
-    path_p0 = (path_py)[:-3] + ".flatpy"
-    try:
-        with open(path_p0, "w") as file_p0:
-            file_p0.write(prog_p0)
-            print(f"Wrote to: {path_p0}")
-    except Exception as e:
-        print("Error writing file:", e)        
+    
+    prog_flat = generate_p0(tree, 0)
+    path_flat = (path_py)[:-3] + ".flatpy"
+    with open(path_flat, "w") as file_flat: file_flat.write(prog_flat)
+    print(f"Wrote to: {path_flat}")
     
     s_ir_arr = s_ir(tree)
+    blocks = cfg(s_ir_arr)
     
     tmps_arr = []
     prev_set = {
@@ -41,22 +38,20 @@ if __name__ == "__main__":
         "%edi": 4,
         "%esi": 5,
     }
+    
     while True:
-        liveness_arr = liveness(s_ir_arr)
-        interference_graph = interference(s_ir_arr, liveness_arr)
-        color_dict = coloring(interference_graph, tmps_arr, prev_set)
+        for i in range(len(blocks)): blocks[i].reset_liveness_arr()
+        blocks = liveness(blocks)
+        interference_graph = interference(blocks)
+        color_dict = coloring(dict(interference_graph), tmps_arr, prev_set)
         for key, value in color_dict.items():
             if value >= 6: prev_set[key] = value
-        s_ir_arr, tmps_arr_ = spillage(s_ir_arr, color_dict, len(tmps_arr))
+        blocks, tmps_arr_ = spillage(blocks, color_dict)
         if not tmps_arr_: break
         tmps_arr.extend(tmps_arr_)
-        
-    prog_s = generate_s(s_ir_arr, color_dict)
+    
+    prog_s = generate_s(blocks, color_dict)
     path_s = (path_py)[:-3] + ".s"
-    try:
-        with open(path_s, "w") as file_s:
-            file_s.write(prog_s)
-            print(f"Wrote to: {path_s}")
-    except Exception as e:
-        print("Error writing file:", e)
+    with open(path_s, "w") as file_s: file_s.write(prog_s)
+    print(f"Wrote to: {path_s}")
     

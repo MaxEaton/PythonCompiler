@@ -2,6 +2,45 @@
 
 from utils import *
 
+def simplify(node):
+    '''
+    Converts an AST node into a simple expression
+
+    :param node: an AST node to be simplified
+    :return: a transformed AST node with simplified structure
+    '''
+    global t_flatten_cnt
+    if isinstance(node, (Constant, Name, Break)): 
+        return node
+    elif isinstance(node, Compare):
+        # SPECIAL: needed since must be wrapped in int()
+        return Compare(
+            left=simplify(node.left),
+            ops=node.ops,
+            comparators=[simplify(comparator) for comparator in node.comparators]
+        )
+    elif isinstance(node, UnaryOp) and isinstance(node.op, Not):
+        # SPECIAL: needed since must be wrapped in int()
+        return UnaryOp(
+            op=node.op,
+            operand=simplify(node.operand)
+        )
+    else:
+        # if not simple create new temporary variable and return
+        value = flatten(node)
+        flatten.module.body.append(Assign(
+            targets=[Name(
+                id=f"t_flatten_{t_flatten_cnt}",
+                ctx=Store()
+            )],
+            value=value
+        ))
+        t_flatten_cnt += 1
+        return Name(
+            id=f"t_flatten_{t_flatten_cnt-1}",
+            ctx=Load()
+        )
+    
 def flatten(node):
     '''
     Recursive function that flattens an AST and converts complex expressions to simple single instructions.
@@ -10,109 +49,50 @@ def flatten(node):
     :return: a module that represents the equivalent Python representation to the AST
     '''
     if isinstance(node, Module):
-        # intialize module to store temp assignments
-        flatten.count = 0
-        flatten.module = ast.parse("")
+        flatten.module = Module(body=[], type_ignores=[])
         for x in node.body: flatten.module.body.append(flatten(x))
         return flatten.module
     elif isinstance(node, Assign):
         return Assign(
-            targets=[flatten(x) for x in node.targets],
+            targets=node.targets,
             value=flatten(node.value)
         )
     elif isinstance(node, Expr):
         return Expr(
             value=flatten(node.value)
         )
-    elif isinstance(node, Constant):
-        return node
-    elif isinstance(node, Name):
+    elif isinstance(node, (Constant, Name, Break)):
         return node
     elif isinstance(node, BinOp):
-        left = node.left
-        right = node.right
-        if not isinstance(left, (Constant, Name)):
-            value = flatten(left)
-            flatten.module.body.append(Assign(
-                targets=[Name(
-                    id=f"tmp{flatten.count}",
-                    ctx=Store()
-                )],
-                value=value
-            ))
-            left = Name(
-                id=f"tmp{flatten.count}",
-                ctx=Load()
-            )
-            flatten.count += 1
-        if not isinstance(right, (Constant, Name)):
-            value = flatten(right)
-            flatten.module.body.append(Assign(
-                targets=[Name(
-                    id=f"tmp{flatten.count}",
-                    ctx=Store()
-                )],
-                value=value
-            ))
-            right = Name(
-                id=f"tmp{flatten.count}",
-                ctx=Load()
-            )
-            flatten.count += 1
         return BinOp(
-            left=left,
+            left=simplify(node.left),
             op=node.op,
-            right=right
+            right=simplify(node.right)
         )
     elif isinstance(node, UnaryOp):
-        operand = node.operand
-        if not isinstance(operand, (Constant, Name)):
-            value = flatten(operand)
-            flatten.module.body.append(Assign(
-                targets=[Name(
-                    id=f"tmp{flatten.count}",
-                    ctx=Store()
-                )],
-                value=value
-            ))
-            operand = Name(
-                id=f"tmp{flatten.count}",
-                ctx=Load()
-            )
-            flatten.count += 1
         return UnaryOp(
-            operand=operand,
+            operand=simplify(node.operand),
             op=node.op
         )
     elif isinstance(node, Call):
-        args = node.args
-        for i in range(len(args)):
-            if not isinstance(args[i], (Constant, Name)) and node.func.id != "eval":
-                value = flatten(args[i])
-                flatten.module.body.append(Assign(
-                    targets=[Name(
-                        id=f"tmp{flatten.count}",
-                        ctx=Store()
-                    )],
-                    value=value
-                ))
-                args[i] = Name(
-                    id=f"tmp{flatten.count}",
-                    ctx=Load()
-                )
-                flatten.count += 1
+        if node.func.id == "eval": 
+            return node
         return Call(
-            func=flatten(node.func),
-            args=args,
+            func=node.func,
+            args=[simplify(arg) for arg in node.args],
             keywords=[]
         )
-    elif isinstance(node, Add):
-        return node
-    elif isinstance(node, USub):
-        return node
-    elif isinstance(node, Load):
-        return node
-    elif isinstance(node, Store):
-        return node
+    elif isinstance(node, Compare):
+        return simplify(node)
+    elif isinstance(node, (If, While)):
+        # save current static module and create new submodules
+        # revert to static module and return node with submodules 
+        test = simplify(node.test)
+        curr_module = flatten.module
+        if_body = flatten(Module(body=node.body)).body
+        or_body = flatten(Module(body=node.orelse)).body
+        flatten.module = curr_module
+        if isinstance(node, If): return If(test=test, body=if_body, orelse=or_body)
+        elif isinstance(node, While): return While(test=test, body=if_body, orelse=or_body)
     else:
         raise Exception(f"flatten: unrecognized AST node {node}")

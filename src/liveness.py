@@ -2,31 +2,40 @@
 
 from utils import *
 
-def liveness(s_ir_arr):
+def liveness(blocks):
     '''
-    Takes assembly ir and returns liveness sets.
-
-    :param s_ir_arr: list of assembly ir
-    :return: list of liveness sets
+    Computes the liveness information for a list of basic blocks. 
+    
+    :param blocks: list of Block objects representing the basic blocks in the program
+    :return: the modified list of blocks with updated liveness information
     '''
-    liveness_arr = [set()]
+    get_key = lambda line, x: line[x] if isinstance(x, int) else x
     
-    for line in reversed(s_ir_arr):
-        curr = set(liveness_arr[-1])
-        if line[0] in ["addl"]:
-            curr.add(line[1])
-            curr.add(line[2])
-        elif line[0] in ["negl"]:
-            curr.add(line[1])
-        elif line[0] in ["movl"]:
-            curr.discard(line[2])
-            curr.add(line[1])
-        elif line[0] in ["call"]:
-            curr.discard("%eax")
-            if line[2]:
-                curr.add(line[2])
-        liveness_arr.append({item for item in curr if not isinstance(item, int)})
+    # add each block from bottom to top to queue
+    q = queue.Queue()
+    for i in range(len(blocks)-1, -1, -1): q.put(blocks[i])
     
-    if liveness_arr[-1]:
-        raise Exception(f"liveness: uninitialize variables {liveness_arr[-1]}")
-    return list(reversed(liveness_arr))
+    while not q.empty():
+        block = q.get()
+        # perform liveness analysis on block
+        for j in range(len(block.lines)-1, -1, -1):
+            line = block.lines[j]
+            curr = set(block.liveness_arr[j+1])
+            s_ir_inst = s_ir_insts.get(line[0])
+            if s_ir_inst:
+                for w in s_ir_inst[0]:
+                    curr.discard(get_key(line, w))
+                for r in s_ir_inst[1]:
+                    r = get_key(line, r)
+                    if r: curr.add(r)
+            block.liveness_arr[j] |= {item for item in curr if not isinstance(item, int)}
+        # update dependent blocks and add them to queue if added anything new
+        for dep in block.deps:
+            prev = set(dep.liveness_arr[-1])
+            dep.liveness_arr[-1] |= block.liveness_arr[0]
+            if dep.liveness_arr[-1] != prev: q.put(dep)
+    
+    if blocks[0].liveness_arr[0]:
+        raise Exception(f"liveness: uninitialize variables {blocks[0].liveness_arr[0]}")
+        
+    return blocks

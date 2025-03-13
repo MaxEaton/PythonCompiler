@@ -1,27 +1,62 @@
+%import common.CNAME                      -> NAME
+%import common.INT                        -> DECIMAL_INT
+%import common.WS_INLINE
+%ignore WS_INLINE
+%declare _INDENT _DEDENT
+
+NEWLINE: (/\n[\t ]*/)+
+WHILE.1: "while"
+IF.1: "if"
+ELSE.1: "else"
+AND.1: "and"
+OR.1: "or"
+NOT.1: "not"
+INT.1: "int"
+EVAL.1: "eval"
+INPUT.1: "input"
+BREAK.1: "break"
+
 start: module
 
-module: (statement COMMENT? | COMMENT)*
+module: stmt*
 
-statement: "print" "(" expression ")"    -> printer
-         | NAME "=" expression           -> assign
-         | expression
+stmt: "print" "(" ternary ")" NEWLINE     -> print_
+    | expr NEWLINE
+    | NAME "=" ternary NEWLINE            -> assign_
+    | BREAK NEWLINE
+    | if_block
+    | while_block
+    | NEWLINE                             -> newline_
 
-expression: add_expr
+expr: ternary
 
-add_expr: add_expr "+" neg_expr          -> add
+ternary: or_expr IF or_expr ELSE ternary  -> ternary_
+       | or_expr
+
+or_expr: or_expr OR and_expr              -> or_
+       | and_expr
+
+and_expr: and_expr AND add_expr           -> and_
+        | add_expr
+
+add_expr: add_expr "+" neg_expr           -> add_
         | neg_expr
 
-neg_expr: "-" neg_expr                   -> neg
+neg_expr: "-" neg_expr                    -> neg_
         | term
 
-term: "(" expression ")"               
-    | NAME
-    | DECIMAL_INT
-    | "eval" "(" "input" "(" ")" ")"     -> evalinput
+term: "(" ternary ")"     
+    | DECIMAL_INT          
+    | NAME          
+    | EVAL "(" INPUT "(" ")" ")"          -> evalinput_
+    | INT "(" NOT ternary ")"             -> not_
+    | INT "(" ternary comp_op ternary ")" -> comp_
 
-%import common.CNAME                     -> NAME
-%import common.INT                       -> DECIMAL_INT
-%import common.WS
-COMMENT: /#.*/
-%ignore COMMENT
-%ignore WS
+comp_op: "=="                             -> eq
+       | "!="                             -> ne
+
+suite: _INDENT stmt+ _DEDENT
+
+if_block: IF ternary ":" NEWLINE suite [ELSE ":" NEWLINE suite]
+
+while_block: WHILE ternary ":" NEWLINE suite [ELSE ":" NEWLINE suite]

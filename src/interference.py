@@ -2,41 +2,43 @@
 
 from utils import *
 
-def interference(s_ir_arr, liveness_arr):
+def interference(blocks):
     '''
-    Takes assembly ir and liveness sets and returns interference graph.
+    Constructs an interference graph based on the liveness information in the given basic blocks.
 
-    :param s_ir_arr: list of assembly ir
-    :param liveness_arr: liveness sets
-    :return: dictionary representing a graph
+    :param blocks: list of Block objects representing the basic blocks in the program
+    :return: a dictionary representing the interference graph, where each key is a variable and the value is a set of interfering variables
     '''
-    # initialize graph with pre-existing interferences between registers
+    get_key = lambda line, x: line[x] if isinstance(x, int) else x
+    
+    # initialize inherent interference between registers
     interference_graph = {
         "%eax": {"%ecx", "%edx", "%ebx", "%edi", "%esi"},
         "%ecx": {"%eax", "%edx", "%ebx", "%edi", "%esi"},
-        "%edx": {"%eax", "%eax", "%ebx", "%edi", "%esi"},
+        "%edx": {"%eax", "%ecx", "%ebx", "%edi", "%esi"},
         "%ebx": {"%eax", "%ecx", "%edx", "%edi", "%esi"},
         "%edi": {"%eax", "%ecx", "%edx", "%ebx", "%esi"},
         "%esi": {"%eax", "%ecx", "%edx", "%ebx", "%edi"},
     }
-    for liveness_var in liveness_arr:
-        for x in liveness_var:
-            interference_graph[x] = set()
     
-    for i in range(len(s_ir_arr)):
-        if s_ir_arr[i][0] in ["movl"]:
-            for live_var in liveness_arr[i+1]:
-                if live_var != s_ir_arr[i][1] and live_var != s_ir_arr[i][2] and s_ir_arr[i][2] in interference_graph:
-                    interference_graph[live_var].add(s_ir_arr[i][2])
-                    interference_graph[s_ir_arr[i][2]].add(live_var)
-        elif s_ir_arr[i][0] in ["addl"]:
-            for live_var in liveness_arr[i+1]:
-                if live_var != s_ir_arr[i][2] and s_ir_arr[i][2] in interference_graph:
-                    interference_graph[live_var].add(s_ir_arr[i][2])
-                    interference_graph[s_ir_arr[i][2]].add(live_var)
-        elif s_ir_arr[i][0] in ["call"]:
-            for live_var in liveness_arr[i+1]:
-                for call_reg in ["%eax", "%ecx", "%edx"]:
-                    interference_graph[live_var].add(call_reg)
-                    interference_graph[call_reg].add(live_var)
+    # initialize all variables to graph with empty set
+    for block in blocks:
+        for liveness_var in block.liveness_arr:
+            for l in liveness_var:
+                if l not in interference_graph: interference_graph[l] = set()
+    
+    # add two way interference if in whitelist but not in blacklist 
+    for block in blocks:
+        for i, line in enumerate(block.lines):
+            s_ir_inst = s_ir_insts.get(line[0])
+            if not s_ir_inst: continue
+            whitelist = {get_key(line, w) for w in s_ir_inst[2] if get_key(line, w) in interference_graph}
+            blacklist = {get_key(line, b) for b in s_ir_inst[3] if get_key(line, b) in interference_graph}
+            for live_var in block.liveness_arr[i+1]:
+                if live_var in blacklist: continue
+                for w in whitelist:
+                    if w != live_var:
+                        interference_graph[live_var].add(w)
+                        interference_graph[w].add(live_var)
+    
     return interference_graph
