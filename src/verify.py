@@ -27,17 +27,14 @@ def verify(node):
         verify(node.operand)
         verify(node.op)
     elif isinstance(node, Call):
-        # function must be print, eval, or input
         if node.func.id not in functions: 
-            raise Exception(f"verify: unrecognized function {node.func.id}") 
-        # no isolated inputs or evals
-        if node.func.id == "eval" and (not len(node.args) or not isinstance(node.args[0], Call) or node.args[0].func.id != "input"): 
+            raise Exception(f"verify: unrecognized function {node.func.id}") #function must be print, eval, or input
+        if node.func.id == "eval" and (not len(node.args) or not isinstance(node.args[0], Call) or node.args[0].func.id != "input"): #no isolated inputs or evals
             raise Exception(f"verify: unrecognized isolated eval()")
         if node.func.id == "input":
             raise Exception(f"verify: unrecognized isolated input()")
         verify(node.func)
-        # check to make sure there is not more than one argument
-        if node.func.id != "eval": 
+        if node.func.id != "eval": #check to make sure there isn't more than one argument
             if len(node.args) > 1:
                 raise Exception(f"verify: too many arguments {node.func.id}")
             for x in node.args: verify(x)

@@ -9,6 +9,7 @@ def liveness(blocks):
     :param blocks: list of Block objects representing the basic blocks in the program
     :return: the modified list of blocks with updated liveness information
     '''
+    for i in range(len(blocks)): blocks[i].reset_liveness_arr()
     get_key = lambda line, x: line[x] if isinstance(x, int) else x
     
     # add each block from bottom to top to queue

@@ -121,7 +121,6 @@ def s_ir(tree):
         else:
             raise Exception(f"s_ir: unrecognized AST node {node}")
         
-    
     # for each node in module add result to arr
     s_ir_arr = []
     for node in tree.body:

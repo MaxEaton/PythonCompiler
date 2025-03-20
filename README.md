@@ -69,9 +69,12 @@ gcc -m32 -g your_program.s runtime/libpyyruntime.a -lm -o your_program
 3. Logical operators are desugared into control blocks to support short circuiting and loops are desugared into infinite loops with a conditional break. 
 4. Complex statements are flattened into simple statements within the AST.
 5. The flattened AST is converted into Python code for intermediate validation.
-6. Liveness analysis is performed and an interference graph is constructed. 
-7. The interference graph is colored using a naive register allocation algorithm, and spill code is inserted as needed.  
-8. The flattened and transformed program is converted into x86 assembly using the assigned register locations.
+6. The AST is converted into an IR that is then subdivided into a control flow graph (CFG). 
+7. Local value numbering is performed for both constant folding and copy folding. 
+8. Dead store elimination is performed iteratively until no more updates are detected. 
+9. Liveness analysis is performed and an interference graph is constructed. 
+10. The interference graph is colored using a naive register allocation algorithm, and spill code is inserted as needed.  
+11. The transformed program is converted into x86 assembly using the assigned register locations.
 
 ## Examples
 

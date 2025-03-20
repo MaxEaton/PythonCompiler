@@ -29,6 +29,15 @@ if __name__ == "__main__":
     s_ir_arr = s_ir(tree)
     blocks = cfg(s_ir_arr)
     
+    blocks = numbering(blocks)
+    while True:
+        for block in blocks:
+            for line in block.lines:
+                print(line)
+        blocks = liveness(blocks)
+        blocks, modified = deadstore(blocks)
+        if not modified: break
+    
     tmps_arr = []
     prev_set = {
         "%eax": 0,
@@ -40,7 +49,6 @@ if __name__ == "__main__":
     }
     
     while True:
-        for i in range(len(blocks)): blocks[i].reset_liveness_arr()
         blocks = liveness(blocks)
         interference_graph = interference(blocks)
         color_dict = coloring(dict(interference_graph), tmps_arr, prev_set)

@@ -28,20 +28,22 @@ keywords = [
 # 2: the indices/reg of interference whitelist
 # 3: the indices/reg of interference blacklist
 # 4: the indices that cannot both be on stack
+# 5: the index of writeback if applicable
 s_ir_insts = {
-    "addl": [[], [1,2], [2], [], [1,2]],
-    "call": [["%eax"], [2], ["%eax", "%ecx", "%edx"], [], []],
-    "cmpl": [[], [1,2], [], [], [1,2]],
-    "eq": [[3], [1,2], ["%eax",3], [], [1,2]],
-    "je": [[], [], [], [], []],
-    "jmp": [[], [], [], [], []],
-    "movl": [[2], [1], [2], [1], [1,2]],
-    "ne": [[3], [1,2], ["%eax",3], [], [1,2]],
-    "negl": [[], [1], [1], [], []],
+    "addl": [[], [1,2], [2], [], [1,2], [2]],
+    "call": [["%eax"], [2], ["%eax", "%ecx", "%edx"], [], [], []],
+    "cmpl": [[], [1,2], [], [], [1,2], []],
+    "eq": [[3], [1,2], ["%eax",3], [], [1,2], [3]],
+    "je": [[], [], [], [], [], []],
+    "jmp": [[], [], [], [], [], []],
+    "movl": [[2], [1], [2], [1], [1,2], [2]],
+    "ne": [[3], [1,2], ["%eax",3], [], [1,2], [3]],
+    "negl": [[], [1], [1], [], [], [1]],
 }
 
 t_desugar_cnt = 0
 t_flatten_cnt = 0
+t_number_cnt = 0
 t_spill_cnt = 0
 t_cmpl_cnt = 0
 if_cnt = 0
@@ -52,9 +54,11 @@ from parse import *
 from verify import *
 from desugar import *
 from flatten import *
-from generate_p0 import *
+from PythonCompiler.src.generate_p0 import *
 from s_ir import *
 from cfg import *
+from numbering import *
+from deadstore import *
 from liveness import *
 from interference import *
 from coloring import *
