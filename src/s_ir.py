@@ -9,39 +9,32 @@ def s_ir(tree):
     :param tree: root of AST
     :return: list of assembly ir
     '''
-    global if_cnt, while_cnt, while_depth, t_cmpl_cnt
+    global if_cnt, while_cnt, while_depth, t_ir_cnt
     
     def value(node):
         # return node value based on type
         if isinstance(node, Constant): return node.value
         elif isinstance(node, Name): return node.id
+        elif isinstance(node, Subscript): return (value(node.value), value(node.slice))
         raise Exception(f"s_ir: unrecognized AST node {node}")
     
     def call(func, args):
         # map function and add args
         name_map = {
-            "print": "print_int_nl",
-            "eval": "eval_input_int",
+            "print": "print_any",
+            "eval": "eval_input_pyobj",
+            "int": "int",
         }
         name = name_map.get(func.id)
         if not name:
             raise Exception(f"s_ir.call: unrecognized function {func.id}")
-        arg = None if len(args) == 0 or name == "eval_input_int" else value(args[0])
-        return ["call", name, arg]
-    
-    def cmpl(test1, test2):
-        # handle different types of comparators
-        global t_cmpl_cnt
-        if isinstance(test1, Constant) and isinstance(test1, Constant):
-            t_cmpl_cnt += 1
+        args = [] if name == "eval_input_pyobj" else [value(arg) for arg in args]
+        if name == "int": 
             return [
-                ["movl", value(test2), f"t_comp_{t_cmpl_cnt-1}"], 
-                ["cmpl", value(test1), f"t_comp_{t_cmpl_cnt-1}"]
+                ["call", "project_bool", args],
+                ["call", "inject_int", ["%eax"]],
             ]
-        elif isinstance(test1, Constant):
-            return [["cmpl", value(test1), value(test2)]]
-        else:
-            return [["cmpl", value(test2), value(test1)]]
+        return [["call", name, args]]
     
     def ifelse(test, body, orelse):
         # perform test and sandwhich between jumps and labels
@@ -49,7 +42,8 @@ def s_ir(tree):
         cnt = if_cnt
         if_cnt += 1
         return [
-            *cmpl(Constant(value=0), test),
+            ["call", "is_true", [value(test)]],
+            ["cmpl", 0, "%eax"],
             ["je", f"ifelse{cnt}"],
             [f"ifthen{cnt}"],
             *s_ir(Module(body=body)),
@@ -89,47 +83,45 @@ def s_ir(tree):
                 ["addl", right, dest],
             ]
         elif isinstance(node, UnaryOp):
-            return [
-                ["movl", value(node.operand), dest],
-                ["negl", dest],
-            ]
+            if type(node.op) == USub:
+                return [
+                    ["movl", value(node.operand), dest],
+                    ["negl", dest],
+                ]
+            elif type(node.op) == Not:
+                return [
+                    ["not", value(node.operand), dest]
+                ]
+        elif isinstance(node, Compare):
+            op_map = {
+                Eq: "eq",
+                NotEq: "ne",
+                Is: "is"
+            }
+            op = op_map.get(type(node.ops[0]))
+            return [[op, value(node.left), value(node.comparators[0]), dest]]
         elif isinstance(node, Call):
-            # SPECIAL: needed since compare must be wrapped in int()
-            if node.func.id == "int":
-                arg = node.args[0]
-                if isinstance(arg, Compare):
-                    op_map = {
-                        Eq: "eq",
-                        NotEq: "ne"
-                    }
-                    op = op_map.get(type(arg.ops[0]))
-                    ret = cmpl(arg.left, arg.comparators[0])
-                    ret[-1].append(dest)
-                    ret[-1][0] = op
-                    return ret
-                elif isinstance(arg, UnaryOp):
-                    ret = cmpl(Constant(value=0), arg.operand)
-                    ret[-1].append(dest)
-                    ret[-1][0] = "eq"
-                    return ret
-                else:
-                    raise Exception(f"s_ir: unrecognized AST node {arg}")
             return [
-                call(node.func, node.args), 
+                *call(node.func, node.args), 
                 ["movl", "%eax", dest],
             ]
+        elif isinstance(node, Subscript):
+            return [["movl", value(node), dest]]
+        elif isinstance(node, Dict):
+            return [["movl", {value(k): value(v) for k, v in zip(node.keys, node.values)}, dest]]
+        elif isinstance(node, List):
+            return [["movl", [value(elt) for elt in node.elts], dest]]
         else:
             raise Exception(f"s_ir: unrecognized AST node {node}")
         
-    
     # for each node in module add result to arr
     s_ir_arr = []
     for node in tree.body:
         if isinstance(node, Assign):
-            s_ir_arr.extend(assign(node.value, node.targets[0].id))
+            s_ir_arr.extend(assign(node.value, value(node.targets[0])))
         elif isinstance(node, Expr):
             if isinstance(node.value, Call) and node.value.func.id != "int":
-                s_ir_arr.append(call(node.value.func, node.value.args))
+                s_ir_arr.extend(call(node.value.func, node.value.args))
         elif isinstance(node, If):
             s_ir_arr.extend(ifelse(node.test, node.body, node.orelse))
         elif isinstance(node, While):

@@ -2,6 +2,16 @@
 
 from utils import *
 
+def hashify(obj):
+    if isinstance(obj, (int, bool, str)):
+        return obj
+    elif isinstance(obj, list):  
+        return tuple(x for x in obj)
+    elif isinstance(obj, tuple):  
+        return (obj,) 
+    elif isinstance(obj, dict):  
+        return frozenset((k, v) for k, v in obj.items())
+
 def liveness(blocks):
     '''
     Computes the liveness information for a list of basic blocks. 
@@ -9,6 +19,7 @@ def liveness(blocks):
     :param blocks: list of Block objects representing the basic blocks in the program
     :return: the modified list of blocks with updated liveness information
     '''
+    for i in range(len(blocks)): blocks[i].reset_liveness_arr()
     get_key = lambda line, x: line[x] if isinstance(x, int) else x
     
     # add each block from bottom to top to queue
@@ -24,17 +35,51 @@ def liveness(blocks):
             s_ir_inst = s_ir_insts.get(line[0])
             if s_ir_inst:
                 for w in s_ir_inst[0]:
-                    curr.discard(get_key(line, w))
-                for r in s_ir_inst[1]:
-                    r = get_key(line, r)
-                    if r: curr.add(r)
-            block.liveness_arr[j] |= {item for item in curr if not isinstance(item, int)}
+                    w = get_key(line, w)
+                    if isinstance(w, (int, bool, list, dict, tuple)):
+                        if isinstance(r, (list, tuple)):
+                            for r_ in r:
+                                if not isinstance(r, (int, bool, list, dict, tuple)):
+                                    curr.discard(r_)
+                        elif isinstance(r, (dict)):
+                            for r1, r2 in r.items():
+                                if not isinstance(r1, (int, bool, list, dict, tuple)):
+                                    curr.discard(r1)
+                                if not isinstance(r2, (int, bool, list, dict, tuple)):
+                                    curr.discard(r2)
+                    elif w:
+                        curr.discard(w)
+                targets = range(len(line[2])) if line[0] == "call" else s_ir_inst[1]
+                for r in targets:
+                    r = get_key(line[2], r) if line[0] == "call" else get_key(line, r)
+                    print("---   ", line, r)
+                    if isinstance(r, (int, bool, list, dict, tuple)):
+                        if isinstance(r, (list, tuple)):
+                            for r_ in r:
+                                if not isinstance(r_, (int, bool, list, dict, tuple)):
+                                    curr.add(r_)
+                        elif isinstance(r, (dict)):
+                            for r1, r2 in r.items():
+                                if not isinstance(r1, (int, bool, list, dict, tuple)):
+                                    curr.add(r1)
+                                if not isinstance(r2, (int, bool, list, dict, tuple)):
+                                    curr.add(r2)
+                    elif r:
+                        curr.add(r)
+            block.liveness_arr[j] |= curr
         # update dependent blocks and add them to queue if added anything new
         for dep in block.deps:
             prev = set(dep.liveness_arr[-1])
             dep.liveness_arr[-1] |= block.liveness_arr[0]
             if dep.liveness_arr[-1] != prev: q.put(dep)
     
+
+    print(blocks[0].liveness_arr[0])
+    for i in range(1,len(blocks[0].lines)):
+        print(blocks[0].lines[i])
+        print(blocks[0].liveness_arr[i+1])
+    print("_____________________________")
+
     if blocks[0].liveness_arr[0]:
         raise Exception(f"liveness: uninitialize variables {blocks[0].liveness_arr[0]}")
         

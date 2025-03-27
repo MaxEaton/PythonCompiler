@@ -31,7 +31,7 @@ def cfg(s_ir_arr):
     labels, lines = {}, []
     
     for line in s_ir_arr:
-        if line[0] in ["movl", "addl", "negl", "cmpl", "eq", "ne", "call"]:
+        if line[0] in ["movl", "addl", "negl", "cmpl", "eq", "ne", "is", "not", "call"]:
             # if not a jump instruction add to accumulator
             lines.append(line)
         elif line[0] in ["je", "jmp"]:

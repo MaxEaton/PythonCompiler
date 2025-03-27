@@ -36,8 +36,10 @@ def generate_s(blocks, color_dict):
 
     for block in blocks:
         for line in block.lines:
-            if line[0] in ["movl", "addl", "cmpl"]:
+            if line[0] in ["movl", "addl", "xorl", "cmpl"]:
                 # optimize out if not assigned a home or is a register
+                if isinstance(line[1], tuple):
+                    prog_s += f"  call get_subscript\n"
                 if (not isinstance(line[1], int) and line[1] not in home_dict) or (not isinstance(line[2], int) and line[2] not in home_dict): continue
                 # get registers from homes or directly from line
                 r1 = home_dict[line[1]] if not isinstance(line[1], int) else f"${line[1]}"
@@ -52,12 +54,11 @@ def generate_s(blocks, color_dict):
                 r1 = home_dict[line[1]] if not isinstance(line[1], int) else f"${line[1]}"
                 prog_s += f"  {line[0]} {r1}\n"
             elif line[0] in ["call"]:
-                if line[2] is not None:
-                    arg = home_dict[line[2]] if not isinstance(line[2], int) else f"${line[2]}"
-                    if arg != "%eax": prog_s += f"  movl {arg}, %eax\n"
-                prog_s += f"  pushl %eax\n"
+                for arg in reversed(line[2]):
+                    arg = home_dict[arg] if not isinstance(arg, (int, bool, list, dict)) else f"${arg}"
+                    prog_s += f"  pushl {arg}\n"
                 prog_s += f"  {line[0]} {line[1]}\n"
-                prog_s += f"  addl $4, %esp\n"
+                prog_s += f"  addl ${4*len(line[2])}, %esp\n"
             elif line[0] in ["eq", "ne"]:
                 # optimize out if not assigned a home or is a register
                 if (not isinstance(line[1], int) and line[1] not in home_dict) or (not isinstance(line[2], int) and line[2] not in home_dict) or (not isinstance(line[3], int) and line[3] not in home_dict): continue
@@ -65,7 +66,8 @@ def generate_s(blocks, color_dict):
                 r1 = home_dict[line[1]] if not isinstance(line[1], int) else f"${line[1]}"
                 r2 = home_dict[line[2]] if not isinstance(line[2], int) else f"${line[2]}"
                 r3 = home_dict[line[3]] if not isinstance(line[3], int) else f"${line[3]}"
-                prog_s += f"  cmpl {r1}, {r2}\n"
+                if r2[0] == "$": prog_s += f"  cmpl {r2}, {r1}\n"
+                else: prog_s += f"  cmpl {r1}, {r2}\n"
                 # sete or setne for eq vs ne
                 if line[0] in ["eq"]: prog_s += f"  sete %al\n"
                 else: prog_s += f"  setne %al\n"

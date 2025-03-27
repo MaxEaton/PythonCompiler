@@ -13,7 +13,7 @@ This project is a compiler for a growing subset of Python, designed to parse, an
   Supports minus operator (`-x`) and not operator (`not x`).
 
 * **Binary Operations**  
-  Supports addition (`x + y`) and logical operators (`x and/or y`) with short circuiting.
+  Supports addition (`x + y`), logical operators (`x and/or y`) with short circuiting and comparison operators (`x ==/!=/is y`).
 
 * **Ternary Operations**  
   Supports the ternary conditional expression (`x if y else z`) by desugaring it into an equivalent `if/else` statement.
@@ -27,11 +27,11 @@ Allows defining and using variables through assignments and expressions.
 * **Assigning Homes**  
   Implements liveness analysis and interference graph construction, followed by a basic graph coloring algorithm to allocate registers efficiently and minimize stack allocations. 
 
-* **Comparators**  
-  Supports equality comparisons wrapped in `int(...)` (`int(x ==/!= y)`), with support currently limited to integer values.
-
 * **Basic Control**  
   Supports `if/else` statements and `while` loops, including support for `break` and `else` clauses within loops. 
+
+* **Dynamic Typing**  
+  Supports integers, booleans, lists, and dictionaries with runtime operator overloading based on operand types.
 
 ## Getting Started
 
@@ -69,9 +69,11 @@ gcc -m32 -g your_program.s runtime/libpyyruntime.a -lm -o your_program
 3. Logical operators are desugared into control blocks to support short circuiting and loops are desugared into infinite loops with a conditional break. 
 4. Complex statements are flattened into simple statements within the AST.
 5. The flattened AST is converted into Python code for intermediate validation.
-6. Liveness analysis is performed and an interference graph is constructed. 
-7. The interference graph is colored using a naive register allocation algorithm, and spill code is inserted as needed.  
-8. The flattened and transformed program is converted into x86 assembly using the assigned register locations.
+6. The AST is converted into an IR that is then subdivided into a control flow graph (CFG). 
+7. Overloaded operations are type checked at runtime to determine the appropriate operation to perform. 
+8. Liveness analysis is performed and an interference graph is constructed. 
+9. The interference graph is colored using a naive register allocation algorithm, and spill code is inserted as needed.  
+10. The transformed program is converted into x86 assembly using the assigned register locations.
 
 ## Examples
 
@@ -139,4 +141,34 @@ while 1:
 6
 -4
 2
+```
+
+### py2
+
+```python
+# source
+m = eval(input())
+n = 3
+l1 = [{}, 1, False, 4]
+l2 = [[3]]
+l3 = l1 + l2
+print(l3[m+n])
+
+# flattened
+s_m = eval(input())
+s_n = 3
+t_flatten_0 = {}
+s_l1 = [t_flatten_0, 1, False, 4]
+t_flatten_1 = [3]
+s_l2 = [t_flatten_1]
+s_l3 = s_l1 + s_l2
+t_flatten_2 = s_m + s_n
+t_flatten_3 = s_l3[t_flatten_2]
+print(t_flatten_3)
+
+# input
+True
+
+# output
+[3]
 ```

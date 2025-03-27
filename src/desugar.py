@@ -111,5 +111,21 @@ def desugar(node):
             body=[*testing, If(test=test, body=body, orelse=[*orelse, Break()])], 
             orelse=[]
         )
+    elif isinstance(node, Subscript):
+        return Subscript(
+            value=desugar(node.value),
+            slice=desugar(node.slice),
+            ctx=node.ctx
+        )
+    elif isinstance(node, Dict):
+        return Dict(
+            keys=[desugar(key) for key in node.keys],
+            values=[desugar(value) for value in node.values]
+        )
+    elif isinstance(node, List):
+        return List(
+            elts=[desugar(elt) for elt in node.elts],
+            ctx=node.ctx
+        )
     else:
         raise Exception(f"desugar: unrecognized AST node {node}")

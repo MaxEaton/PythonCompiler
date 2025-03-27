@@ -12,19 +12,6 @@ def simplify(node):
     global t_flatten_cnt
     if isinstance(node, (Constant, Name, Break)): 
         return node
-    elif isinstance(node, Compare):
-        # SPECIAL: needed since must be wrapped in int()
-        return Compare(
-            left=simplify(node.left),
-            ops=node.ops,
-            comparators=[simplify(comparator) for comparator in node.comparators]
-        )
-    elif isinstance(node, UnaryOp) and isinstance(node.op, Not):
-        # SPECIAL: needed since must be wrapped in int()
-        return UnaryOp(
-            op=node.op,
-            operand=simplify(node.operand)
-        )
     else:
         # if not simple create new temporary variable and return
         value = flatten(node)
@@ -54,7 +41,7 @@ def flatten(node):
         return flatten.module
     elif isinstance(node, Assign):
         return Assign(
-            targets=node.targets,
+            targets=[flatten(target) for target in node.targets],
             value=flatten(node.value)
         )
     elif isinstance(node, Expr):
@@ -83,7 +70,27 @@ def flatten(node):
             keywords=[]
         )
     elif isinstance(node, Compare):
-        return simplify(node)
+        return Compare(
+            left=simplify(node.left),
+            ops=node.ops,
+            comparators=[simplify(comparator) for comparator in node.comparators]
+        )
+    if isinstance(node, Subscript):
+        return Subscript(
+            value=simplify(node.value),
+            slice=simplify(node.slice),
+            ctx=node.ctx
+        )
+    if isinstance(node, Dict):
+        return Dict(
+            keys=[simplify(key) for key in node.keys],
+            values=[simplify(value) for value in node.values]
+        )
+    if isinstance(node, List):
+        return List(
+            elts=[simplify(elt) for elt in node.elts],
+            ctx=node.ctx
+        )
     elif isinstance(node, (If, While)):
         # save current static module and create new submodules
         # revert to static module and return node with submodules 

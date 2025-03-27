@@ -1,6 +1,8 @@
 #!/usr/bin/env python3.10
 
+
 from utils import *
+
 
 def verify(node):
     '''
@@ -27,16 +29,17 @@ def verify(node):
         verify(node.operand)
         verify(node.op)
     elif isinstance(node, Call):
-        # function must be print, eval, or input
         if node.func.id not in functions: 
+            # function must be print, eval, or input
             raise Exception(f"verify: unrecognized function {node.func.id}") 
-        # no isolated inputs or evals
         if node.func.id == "eval" and (not len(node.args) or not isinstance(node.args[0], Call) or node.args[0].func.id != "input"): 
+            # no isolated eval
             raise Exception(f"verify: unrecognized isolated eval()")
         if node.func.id == "input":
+            # no isolated input
             raise Exception(f"verify: unrecognized isolated input()")
         verify(node.func)
-        # check to make sure there is not more than one argument
+        # check to make sure there isn't more than one argument
         if node.func.id != "eval": 
             if len(node.args) > 1:
                 raise Exception(f"verify: too many arguments {node.func.id}")
@@ -71,7 +74,15 @@ def verify(node):
         verify(node.test)
         for line in node.body: verify(line)
         for line in node.orelse: verify(line)
-    elif isinstance(node, (Constant, Add, USub, Load, Store, And, Or, Not, Eq, NotEq, Break)):
+    elif isinstance(node, Subscript):
+        verify(node.value)
+        verify(node.slice)
+    elif isinstance(node, Dict):
+        for key in node.keys: verify(key)
+        for value in node.values: verify(value)
+    elif isinstance(node, List):
+        for elt in node.elts: verify(elt)
+    elif isinstance(node, (Constant, Add, USub, Load, Store, And, Or, Not, Eq, NotEq, Is, Break)):
         pass
     else:
         raise Exception(f"verify: unrecognized AST node {node}")

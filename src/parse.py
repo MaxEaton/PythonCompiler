@@ -15,7 +15,10 @@ class PyIndenter(Indenter):
 
 class ToAst(Transformer): 
     def module(self, args):
-        return Module(body=[arg for arg in args if arg is not None], type_ignores=[])
+        return Module(
+            body=[arg for arg in args if arg is not None], 
+            type_ignores=[]
+        )
     
     def stmt(self, args):
         if isinstance(args[0], Assign):
@@ -25,6 +28,50 @@ class ToAst(Transformer):
     def expr(self, args):
         return Expr(args[0])
     
+    def obj(self, args):
+        return args[0]
+    
+    def big(self, args):
+        return args[0]
+    
+    def subscription(self, args):
+        return Subscript(
+            value=args[0],
+            slice=args[1],
+            ctx=Load()
+        )
+    
+    def dictionary(self, args):
+        if args[0]:
+            keys, values = zip(*args[0])
+            keys = list(keys)
+            values = list(values)
+        else:
+            keys = values = []
+        return Dict(
+            keys=keys,
+            values=values
+        )
+    
+    def dict_datum(self, args):
+        return [(args[0], args[1])]
+    
+    def dict_data(self, args):
+        return [*args[0], (args[1], args[2])]
+    
+    def listionary(self, args):
+        if not args[0]: args[0] = []
+        return List(
+            elts=[arg for arg in args[0] if arg is not None],
+            ctx=Load()
+        )
+    
+    def list_datum(self, args):
+        return args
+    
+    def list_data(self, args):
+        return [*args[0], args[1]]
+            
     def ternary(self, args):
         return args[0]
     
@@ -39,6 +86,12 @@ class ToAst(Transformer):
         return args[0]
     
     def and_expr(self, args):
+        return args[0]
+    
+    def comp_expr(self, args):
+        return args[0]
+    
+    def not_expr(self, args):
         return args[0]
     
     def add_expr(self, args):
@@ -61,9 +114,6 @@ class ToAst(Transformer):
         args[0].ctx = Store()
         return Assign(targets = [args[0]], value = args[1])
     
-    def newline_(self, args):
-        return None
-    
     def or_(self, args):
         return BoolOp(
             values=[args[0], args[2]],
@@ -76,6 +126,19 @@ class ToAst(Transformer):
             op=And()
         )
     
+    def comp_(self, args):
+        return Compare(
+            left=args[0], 
+            ops=[args[1]], 
+            comparators=[args[2]]
+        )
+    
+    def not_(self, args):
+        return UnaryOp(
+            op=Not(), 
+            operand=args[1]
+        )
+        
     def add_(self, args):
         return BinOp(left = args[0], op = Add(), right = args[1])
     
@@ -89,25 +152,27 @@ class ToAst(Transformer):
             keywords = []
         )
     
-    def not_(self, args):
+    def int_(self, args):
         return Call(
             func = Name(id="int", ctx=Load()), 
-            args = [UnaryOp(op=Not(), operand=args[2])],
+            args = [args[1]],
             keywords = []
         )
     
-    def comp_(self, args):
-        return Call(
-            func = Name(id="int", ctx=Load()), 
-            args = [Compare(left=args[1], ops=[args[2]], comparators=[args[3]])],
-            keywords = []
-        )
+    def true_(self, args):
+        return Constant(value=True)
     
-    def eq(self, args):
+    def false_(self, args):
+        return Constant(value=False)
+    
+    def eq_(self, args):
         return Eq()
     
-    def ne(self, args):
+    def ne_(self, args):
         return NotEq()
+    
+    def is_(self, args):
+        return Is()
     
     def suite(self, args):
         return args
@@ -125,6 +190,9 @@ class ToAst(Transformer):
             body=args[3], 
             orelse=[] if (len(args)<7 or not args[6]) else args[6]
         )
+    
+    def empty(self, args):
+        return None
     
     def DECIMAL_INT(self, args):
         return Constant(value = int(args))

@@ -11,32 +11,62 @@ ELSE.1: "else"
 AND.1: "and"
 OR.1: "or"
 NOT.1: "not"
+IS.1: "is"
 INT.1: "int"
 EVAL.1: "eval"
 INPUT.1: "input"
 BREAK.1: "break"
+TRUE.1: "True"
+FALSE.1: "False"
 
 start: module
 
 module: stmt*
 
-stmt: "print" "(" ternary ")" NEWLINE     -> print_
+stmt: "print" "(" obj ")" NEWLINE         -> print_
     | expr NEWLINE
-    | NAME "=" ternary NEWLINE            -> assign_
+    | NAME "=" obj NEWLINE                -> assign_
+    | subscription "=" obj NEWLINE        -> assign_
+    | listionary "=" obj NEWLINE          -> assign_
     | BREAK NEWLINE
     | if_block
     | while_block
-    | NEWLINE                             -> newline_
+    | NEWLINE                             -> empty
 
-expr: ternary
+expr: obj
 
-ternary: or_expr IF or_expr ELSE ternary  -> ternary_
+subscription: term "[" obj "]"
+
+obj: ternary
+
+big: dictionary
+   | listionary
+
+dictionary: "{" dict_data "}"
+
+dict_data:                                -> empty
+         | obj ":" obj                    -> dict_datum
+         | dict_data "," obj ":" obj
+
+listionary: "[" list_data "]"
+
+list_data:                                -> empty
+         | obj                            -> list_datum
+         | list_data "," obj
+
+ternary: or_expr IF or_expr ELSE obj      -> ternary_
        | or_expr
 
 or_expr: or_expr OR and_expr              -> or_
        | and_expr
 
-and_expr: and_expr AND add_expr           -> and_
+and_expr: and_expr AND comp_expr          -> and_
+        | comp_expr
+
+comp_expr: comp_expr comp_op not_expr     -> comp_
+         | not_expr
+
+not_expr: NOT not_expr                    -> not_
         | add_expr
 
 add_expr: add_expr "+" neg_expr           -> add_
@@ -45,18 +75,22 @@ add_expr: add_expr "+" neg_expr           -> add_
 neg_expr: "-" neg_expr                    -> neg_
         | term
 
-term: "(" ternary ")"     
+term: "(" obj ")"     
     | DECIMAL_INT          
     | NAME          
     | EVAL "(" INPUT "(" ")" ")"          -> evalinput_
-    | INT "(" NOT ternary ")"             -> not_
-    | INT "(" ternary comp_op ternary ")" -> comp_
+    | INT "(" obj ")"                     -> int_
+    | TRUE                                -> true_
+    | FALSE                               -> false_
+    | subscription
+    | big
 
-comp_op: "=="                             -> eq
-       | "!="                             -> ne
+comp_op: "=="                             -> eq_
+       | "!="                             -> ne_
+       | IS                               -> is_
 
 suite: _INDENT stmt+ _DEDENT
 
-if_block: IF ternary ":" NEWLINE suite [ELSE ":" NEWLINE suite]
+if_block: IF obj ":" NEWLINE suite [ELSE ":" NEWLINE suite]
 
-while_block: WHILE ternary ":" NEWLINE suite [ELSE ":" NEWLINE suite]
+while_block: WHILE obj ":" NEWLINE suite [ELSE ":" NEWLINE suite]

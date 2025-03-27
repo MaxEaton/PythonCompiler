@@ -12,7 +12,7 @@ if __name__ == "__main__":
         for line in file.read().split('\n'):
             prog_py += line.split('#', 1)[0] + "\n"
     
-    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "grammar.lark"), 'r') as file_lark: 
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "grammar.lark"), 'r') as file_lark:
         prog_lark = file_lark.read()
     parser = Lark(prog_lark, parser="lalr", start="module", debug=True, transformer=ToAst(), postlex=PyIndenter())
     
@@ -20,7 +20,7 @@ if __name__ == "__main__":
     tree = verify(tree)
     tree = desugar(tree)
     tree = flatten(tree)
-    
+
     prog_flat = generate_p0(tree, 0)
     path_flat = (path_py)[:-3] + ".flatpy"
     with open(path_flat, "w") as file_flat: file_flat.write(prog_flat)
@@ -28,7 +28,8 @@ if __name__ == "__main__":
     
     s_ir_arr = s_ir(tree)
     blocks = cfg(s_ir_arr)
-    
+    blocks = explicate(blocks)
+
     tmps_arr = []
     prev_set = {
         "%eax": 0,
@@ -40,7 +41,6 @@ if __name__ == "__main__":
     }
     
     while True:
-        for i in range(len(blocks)): blocks[i].reset_liveness_arr()
         blocks = liveness(blocks)
         interference_graph = interference(blocks)
         color_dict = coloring(dict(interference_graph), tmps_arr, prev_set)

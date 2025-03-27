@@ -10,7 +10,6 @@ def interference(blocks):
     :return: a dictionary representing the interference graph, where each key is a variable and the value is a set of interfering variables
     '''
     get_key = lambda line, x: line[x] if isinstance(x, int) else x
-    
     # initialize inherent interference between registers
     interference_graph = {
         "%eax": {"%ecx", "%edx", "%ebx", "%edi", "%esi"},

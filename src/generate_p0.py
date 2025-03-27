@@ -37,6 +37,14 @@ def generate_p0(node, indent):
                       f"{' ' * (indent+1) * 4}" + \
                       f"\n{' ' * (indent+1) * 4}".join([str(generate_p0(x, indent+1)) for x in node.orelse])
         return result
+    elif isinstance(node, Subscript):
+        if isinstance(node.slice, Constant): value = node.slice.value
+        else: value = node.slice.id
+        return f"{node.value.id}[{value}]"
+    elif isinstance(node, Dict):
+        return f"{{{', '.join([f'{generate_p0(k, indent)}: {generate_p0(v, indent)}' for k, v in zip(node.keys, node.values)])}}}"
+    elif isinstance(node, List):
+        return f"[{', '.join([generate_p0(elt, indent) for elt in node.elts])}]"
     elif isinstance(node, Add):
         return "+"
     elif isinstance(node, USub):
@@ -47,6 +55,8 @@ def generate_p0(node, indent):
         return "=="
     elif isinstance(node, NotEq):
         return "!="
+    elif isinstance(node, Is):
+        return "is"
     elif isinstance(node, (Load, Store)):
         return ""
     elif isinstance(node, Break):
