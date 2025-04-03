@@ -17,7 +17,13 @@ if __name__ == "__main__":
     parser = Lark(prog_lark, parser="lalr", start="module", debug=True, transformer=ToAst(), postlex=PyIndenter())
     
     tree = parser.parse(prog_py)
-    tree = verify(tree)
+    tree = uniquify(tree)
+    
+    tree = unify(tree)
+    tree, main_heap = free_list(tree)
+    tree = heapify(tree, set(), main_heap)
+    tree = closurify(tree)
+
     tree = desugar(tree)
     tree = flatten(tree)
 
@@ -25,10 +31,10 @@ if __name__ == "__main__":
     path_flat = (path_py)[:-3] + ".flatpy"
     with open(path_flat, "w") as file_flat: file_flat.write(prog_flat)
     print(f"Wrote to: {path_flat}")
-    
-    s_ir_arr = s_ir(tree)
-    blocks = cfg(s_ir_arr)
-    blocks = explicate(blocks)
+
+    s_ir_arr_dict = s_ir(tree)
+    blocks_dict = cfg(s_ir_arr_dict)
+    blocks_dict = explicate(blocks_dict)
 
     tmps_arr = []
     prev_set = {
@@ -39,18 +45,18 @@ if __name__ == "__main__":
         "%edi": 4,
         "%esi": 5,
     }
-    
+
     while True:
-        blocks = liveness(blocks)
-        interference_graph = interference(blocks)
+        blocks_dict = liveness(blocks_dict)
+        interference_graph = interference(blocks_dict)
         color_dict = coloring(dict(interference_graph), tmps_arr, prev_set)
         for key, value in color_dict.items():
             if value >= 6: prev_set[key] = value
-        blocks, tmps_arr_ = spillage(blocks, color_dict)
+        blocks_dict, tmps_arr_ = spillage(blocks_dict, color_dict)
         if not tmps_arr_: break
         tmps_arr.extend(tmps_arr_)
     
-    prog_s = generate_s(blocks, color_dict)
+    prog_s = generate_s(blocks_dict, color_dict)
     path_s = (path_py)[:-3] + ".s"
     with open(path_s, "w") as file_s: file_s.write(prog_s)
     print(f"Wrote to: {path_s}")

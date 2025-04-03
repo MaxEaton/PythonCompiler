@@ -10,11 +10,11 @@ def simplify(node):
     :return: a transformed AST node with simplified structure
     '''
     global t_flatten_cnt
-    if isinstance(node, (Constant, Name, Break)): 
+    if isinstance(node, (Name, Break)): 
         return node
     else:
         # if not simple create new temporary variable and return
-        value = flatten(node)
+        value = node if isinstance(node, Constant) else flatten(node)
         flatten.module.body.append(Assign(
             targets=[Name(
                 id=f"t_flatten_{t_flatten_cnt}",
@@ -49,7 +49,7 @@ def flatten(node):
             value=flatten(node.value)
         )
     elif isinstance(node, (Constant, Name, Break)):
-        return node
+        return simplify(node)
     elif isinstance(node, BinOp):
         return BinOp(
             left=simplify(node.left),
@@ -62,10 +62,9 @@ def flatten(node):
             op=node.op
         )
     elif isinstance(node, Call):
-        if node.func.id == "eval": 
-            return node
+        if isinstance(node.func, Name) and node.func.id == "eval":  return node
         return Call(
-            func=node.func,
+            func=simplify(node.func),
             args=[simplify(arg) for arg in node.args],
             keywords=[]
         )
@@ -101,5 +100,18 @@ def flatten(node):
         flatten.module = curr_module
         if isinstance(node, If): return If(test=test, body=if_body, orelse=or_body)
         elif isinstance(node, While): return While(test=test, body=if_body, orelse=or_body)
+    elif isinstance(node, Return):
+        return Return(
+            value=simplify(node.value)
+        )
+    elif isinstance(node, FunctionDef):
+        curr_module = flatten.module
+        body = flatten(Module(body=node.body)).body
+        flatten.module = curr_module
+        return FunctionDef(
+            name=node.name,
+            args=node.args,
+            body=body
+        )
     else:
         raise Exception(f"flatten: unrecognized AST node {node}")

@@ -19,22 +19,30 @@ def s_ir(tree):
         raise Exception(f"s_ir: unrecognized AST node {node}")
     
     def call(func, args):
+        global t_ir_cnt
         # map function and add args
         name_map = {
             "print": "print_any",
             "eval": "eval_input_pyobj",
             "int": "int",
+            "create_closure": "create_closure",
+            "get_fun_ptr": "get_fun_ptr",
+            "get_free_vars": "get_free_vars",
         }
-        name = name_map.get(func.id)
-        if not name:
-            raise Exception(f"s_ir.call: unrecognized function {func.id}")
+        name = name_map.get(func.id, func.id)
         args = [] if name == "eval_input_pyobj" else [value(arg) for arg in args]
         if name == "int": 
             return [
                 ["call", "project_bool", args],
                 ["call", "inject_int", ["%eax"]],
             ]
-        return [["call", name, args]]
+        elif name == "create_closure":
+            return [
+                ["call", "create_closure", args],
+                ["call", "inject_big", ["%eax"]],
+            ]
+        else:
+            return [["call", name, args]]
     
     def ifelse(test, body, orelse):
         # perform test and sandwhich between jumps and labels
@@ -46,16 +54,16 @@ def s_ir(tree):
             ["cmpl", 0, "%eax"],
             ["je", f"ifelse{cnt}"],
             [f"ifthen{cnt}"],
-            *s_ir(Module(body=body)),
+            *s_ir(Module(body=body))["main"][0],
             ["jmp", f"ifend{cnt}"],
             [f"ifelse{cnt}"],
-            *s_ir(Module(body=orelse)),
+            *s_ir(Module(body=orelse))["main"][0],
             [f"ifend{cnt}"]
         ]
         
     def while_loop(body):
         # record depth for break and revert
-        # sanwhich interior with jumps and labels
+        # sandwich interior with jumps and labels
         global while_cnt, while_depth
         cnt = while_cnt
         prv = while_depth
@@ -63,13 +71,13 @@ def s_ir(tree):
         while_cnt += 1
         ret = [
             [f"while_loop{cnt}"],
-            *s_ir(Module(body=body)),
+            *s_ir(Module(body=body))["main"][0],
             ["jmp", f"while_loop{cnt}"],
             [f"while_end{cnt}"],
         ]
         while_depth = prv
         return ret
-    
+
     def assign(node, dest):
         # perform operations based on IR
         if isinstance(node, (Constant, Name)):
@@ -115,22 +123,30 @@ def s_ir(tree):
             raise Exception(f"s_ir: unrecognized AST node {node}")
         
     # for each node in module add result to arr
-    s_ir_arr = []
+    s_ir_arr_dict = {
+        "main": ([], [])
+    }
     for node in tree.body:
         if isinstance(node, Assign):
-            s_ir_arr.extend(assign(node.value, value(node.targets[0])))
+            s_ir_arr_dict["main"][0].extend(assign(node.value, value(node.targets[0])))
         elif isinstance(node, Expr):
             if isinstance(node.value, Call) and node.value.func.id != "int":
-                s_ir_arr.extend(call(node.value.func, node.value.args))
+                s_ir_arr_dict["main"][0].extend(call(node.value.func, node.value.args))
         elif isinstance(node, If):
-            s_ir_arr.extend(ifelse(node.test, node.body, node.orelse))
+            s_ir_arr_dict["main"][0].extend(ifelse(node.test, node.body, node.orelse))
         elif isinstance(node, While):
-            s_ir_arr.extend(while_loop(node.body))
+            s_ir_arr_dict["main"][0].extend(while_loop(node.body))
         elif isinstance(node, Break):
             if while_depth == -1:
                 raise Exception(f"s_ir: break not in while")
-            s_ir_arr.append(["jmp", f"while_end{while_depth}"])
+            s_ir_arr_dict["main"][0].append(["jmp", f"while_end{while_depth}"])
+        elif isinstance(node, Return):
+            s_ir_arr_dict["main"][0].extend(assign(node.value, "%eax"))
+        elif isinstance(node, FunctionDef):
+            inner_dict = s_ir(Module(body=node.body))
+            inner_dict[node.name] = (inner_dict.pop("main")[0], [arg.arg for arg in node.args.args])
+            s_ir_arr_dict.update(inner_dict)
         else:
             raise Exception(f"s_ir: unrecognized AST node {node}")
     
-    return s_ir_arr
+    return s_ir_arr_dict

@@ -127,5 +127,18 @@ def desugar(node):
             elts=[desugar(elt) for elt in node.elts],
             ctx=node.ctx
         )
+    elif isinstance(node, Return):
+        return Return(
+            value=desugar(node.value),
+        )
+    elif isinstance(node, FunctionDef):
+        curr_module = desugar.module
+        body = desugar(Module(body=node.body)).body
+        desugar.module = curr_module
+        return FunctionDef(
+            name=node.name,
+            args=node.args,
+            body=body
+        )
     else:
         raise Exception(f"desugar: unrecognized AST node {node}")

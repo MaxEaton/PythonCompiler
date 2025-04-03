@@ -203,7 +203,33 @@ def cmpl_box(r1, r2, eq):
         ["call", "inject_bool", ["%eax"]]
     ]
 
-def explicate(blocks):
+def call_box(func, args):
+    global explicate_cnt, t_explicate_cnt
+    if func in functions: return [["call", func, args]]
+    curr_cnt = explicate_cnt
+    explicate_cnt += 1
+    fun_ptr = f"t_explicate_{t_explicate_cnt}"
+    t_explicate_cnt += 1
+    free_vars = f"t_explicate_{t_explicate_cnt}"
+    t_explicate_cnt += 1
+    return [
+        ["call", "is_big", [func]],
+        ["cmpl", 1, "%eax"],
+        ["je", f"func_big{curr_cnt}"],
+        ["call", func, args],
+        ["jmp", f"call_end{curr_cnt}"],
+
+        [f"func_big{curr_cnt}"],
+        ["call", "get_fun_ptr", [func]],
+        ["movl", "%eax", fun_ptr],
+        ["call", "get_free_vars", [func]],
+        ["movl", "%eax", free_vars],
+        ["call", fun_ptr, [free_vars, *args]],
+
+        [f"call_end{curr_cnt}"],
+    ]
+
+def explicate(blocks_dict):
     '''
     Transforms X86 IR into an explicated form.
     
@@ -211,138 +237,144 @@ def explicate(blocks):
     :return: list of Block objects with explication
     '''
     global t_explicate_cnt, explicate_cnt
-    for block in blocks:
-        j = 0
-        while j < len(block.lines):
-            line = block.lines[j]
-            if line[0] == "movl":
-                # box if constant, big, or subscript
-                if isinstance(line[1], (int, bool, list, dict, tuple)):
-                    box_block = box(line[1])
-                    block.lines[j:j] = box_block
-                    j += len(box_block)
-                    block.lines[j][1] = "%eax"
-                    line[1] = "%eax"
-                # call for set subscript
-                if isinstance(line[2], tuple):
-                    r1 = f"t_explicate_{t_explicate_cnt}"
-                    t_explicate_cnt += 1
-                    block.lines.insert(j, ["movl", line[1], r1])
-                    j += 1
-                    box_block = box(line[2][1])
-                    block.lines[j:j] = box_block
-                    j += len(box_block)
-                    block.lines[j] = ["call", "set_subscript", [line[2][0], "%eax", r1]]
-            elif line[0] == "addl":
-                r1 = line[1]
-                # unbox if variable
-                if isinstance(r1, (int, bool)): r1 = int(r1)
-                elif not isinstance(r1, (int, bool)):
-                    r1 = f"t_explicate_{t_explicate_cnt}"
-                    t_explicate_cnt += 1
-                    unbox_block = unbox(line[1], r1)
-                    block.lines[j:j] = unbox_block
-                    j += len(unbox_block)
-                # perform add based on type
-                box_block = do_op(["addl", r1, "%eax"], ["addl", r1, "%eax"], ["call", "add", ["%eax", r1]], line[2])
-                block.lines[j:j] = box_block
-                j += len(box_block)
-                block.lines[j] = ["movl", "%eax", line[2]]
-            elif line[0] == "negl":
-                # perform neg is int
-                box_block = do_op(["negl", "%eax"], ["negl", "%eax"], ["negl", "%eax"], line[1])
-                block.lines[j:j] = box_block
-                j += len(box_block)
-                block.lines[j] = ["movl", "%eax", line[1]]
-            elif line[0] in ["eq", "ne"]:
-                r1 = line[1]
-                r2 = line[2]
-                # set constant if can evaluate
-                if isinstance(r1, (int, bool)) and isinstance(r2, (int, bool)): # TODO: move to numbering
-                    if line[0] == "eq": block.lines[j] = ["movl", r1 == r2, line[3]]
-                    else: block.lines[j] = ["movl", r1 != r2, line[3]]
-                    continue
-                # box r1 if needed
-                if isinstance(r1, (int, bool)):
-                    r1_new = f"t_explicate_{t_explicate_cnt}"
-                    t_explicate_cnt += 1
-                    box_block = box(r1)
-                    block.lines[j:j] = box_block
-                    j += len(box_block)
-                    block.lines.insert(j, ["movl", "%eax", r1_new])
-                    j += 1
-                    r1 = r1_new
-                # box r2 if needed
-                if isinstance(r2, (int, bool)):
-                    r2_new = f"t_explicate_{t_explicate_cnt}"
-                    t_explicate_cnt += 1
-                    box_block = box(r2)
-                    block.lines[j:j] = box_block
-                    j += len(box_block)
-                    block.lines.insert(j, ["movl", "%eax", r2_new])
-                    j += 1
-                    r2 = r2_new
-                # compare based on unboxed values
-                cmpl_block = cmpl_box(r1, r2, line[0])
-                block.lines[j:j] = cmpl_block
-                j += len(cmpl_block)
-                block.lines[j] = ["movl", "%eax", line[3]]
-            elif line[0] == "is":
-                r1 = line[1]
-                r2 = line[2]
-                # set constant if can evaluate
-                if isinstance(r1, (int, bool)) and isinstance(r2, (int, bool)): # TODO: move to numbering
-                    block.lines[j] = ["movl", r1 == r2 and type(r1) == type(r2), line[3]]
-                    continue
-                # box r1 if needed
-                if isinstance(r1, (int, bool)):
-                    box_block = box(r1)
-                    block.lines[j:j] = box_block
-                    j += len(box_block)
-                    r1 = "%eax"
-                # box r2 if needed
-                if isinstance(r2, (int, bool)):
-                    box_block = box(r2)
-                    block.lines[j:j] = box_block
-                    j += len(box_block)
-                    r2 = "%eax"
-                # compare boxed values
-                block.lines[j] = ["eq", r1, r2, line[3]]
-                block.lines.insert(j+1, ["call", "inject_bool", [line[3]]])
-                j += 1
-                block.lines.insert(j+1, ["movl", "%eax", line[3]])
-                j += 1
-            elif line[0] == "not":
-                r1 = line[1]
-                # set constant if can evaluate
-                if isinstance(r1, (int, bool)): # TODO: move to numbering
-                    block.lines[j] = ["movl", not r1, line[2]]
-                    continue
-                block.lines.insert(j, ["call", "is_true", [r1]])
-                j += 1
-                block.lines.insert(j, ["xorl", 1, "%eax"])
-                j += 1
-                block.lines.insert(j, ["call", "inject_bool", ["%eax"]])
-                j += 1
-                block.lines[j] = ["movl","%eax", line[2]]
-            elif line[0] == "call":
-                for i in range(len(line[2])):
-                    # box constants
-                    if isinstance(line[2][i], bool):
-                        arg = f"t_explicate_{t_explicate_cnt}"
+    for blocks, _ in blocks_dict.values():
+        for block in blocks:
+            j = 0
+            while j < len(block.lines):
+                line = block.lines[j]
+                if line[0] == "movl":
+                    # box if constant, big, or subscript
+                    if isinstance(line[1], (int, bool, list, dict, tuple)):
+                        box_block = box(line[1])
+                        block.lines[j:j] = box_block
+                        j += len(box_block)
+                        block.lines[j][1] = "%eax"
+                        line[1] = "%eax"
+                    # call for set subscript
+                    if isinstance(line[2], tuple):
+                        r1 = f"t_explicate_{t_explicate_cnt}"
                         t_explicate_cnt += 1
-                        block.lines.insert(j, ["call", "inject_bool", [int(line[2][i])]])
+                        block.lines.insert(j, ["movl", line[1], r1])
                         j += 1
-                        block.lines.insert(j, ["movl", "%eax", arg])
-                        j += 1
-                        block.lines[j][2][i] = arg
-                    elif isinstance(line[2][i], int):
-                        arg = f"t_explicate_{t_explicate_cnt}"
+                        box_block = box(line[2][1])
+                        block.lines[j:j] = box_block
+                        j += len(box_block)
+                        block.lines[j] = ["call", "set_subscript", [line[2][0], "%eax", r1]]
+                elif line[0] == "addl":
+                    r1 = line[1]
+                    # unbox if variable
+                    if isinstance(r1, (int, bool)): r1 = int(r1)
+                    elif not isinstance(r1, (int, bool)):
+                        r1 = f"t_explicate_{t_explicate_cnt}"
                         t_explicate_cnt += 1
-                        block.lines.insert(j, ["call", "inject_int", [line[2][i]]])
+                        unbox_block = unbox(line[1], r1)
+                        block.lines[j:j] = unbox_block
+                        j += len(unbox_block)
+                    # perform add based on type
+                    box_block = do_op(["addl", r1, "%eax"], ["addl", r1, "%eax"], ["call", "add", ["%eax", r1]], line[2])
+                    block.lines[j:j] = box_block
+                    j += len(box_block)
+                    block.lines[j] = ["movl", "%eax", line[2]]
+                elif line[0] == "negl":
+                    # perform neg is int
+                    box_block = do_op(["negl", "%eax"], ["negl", "%eax"], ["negl", "%eax"], line[1])
+                    block.lines[j:j] = box_block
+                    j += len(box_block)
+                    block.lines[j] = ["movl", "%eax", line[1]]
+                elif line[0] in ["eq", "ne"]:
+                    r1 = line[1]
+                    r2 = line[2]
+                    # set constant if can evaluate
+                    if isinstance(r1, (int, bool)) and isinstance(r2, (int, bool)): # TODO: move to numbering
+                        if line[0] == "eq": block.lines[j] = ["movl", r1 == r2, line[3]]
+                        else: block.lines[j] = ["movl", r1 != r2, line[3]]
+                        continue
+                    # box r1 if needed
+                    if isinstance(r1, (int, bool)):
+                        r1_new = f"t_explicate_{t_explicate_cnt}"
+                        t_explicate_cnt += 1
+                        box_block = box(r1)
+                        block.lines[j:j] = box_block
+                        j += len(box_block)
+                        block.lines.insert(j, ["movl", "%eax", r1_new])
                         j += 1
-                        block.lines.insert(j, ["movl", "%eax", arg])
+                        r1 = r1_new
+                    # box r2 if needed
+                    if isinstance(r2, (int, bool)):
+                        r2_new = f"t_explicate_{t_explicate_cnt}"
+                        t_explicate_cnt += 1
+                        box_block = box(r2)
+                        block.lines[j:j] = box_block
+                        j += len(box_block)
+                        block.lines.insert(j, ["movl", "%eax", r2_new])
                         j += 1
-                        block.lines[j][2][i] = arg
-            j += 1
-    return blocks
+                        r2 = r2_new
+                    # compare based on unboxed values
+                    cmpl_block = cmpl_box(r1, r2, line[0])
+                    block.lines[j:j] = cmpl_block
+                    j += len(cmpl_block)
+                    block.lines[j] = ["movl", "%eax", line[3]]
+                elif line[0] == "is":
+                    r1 = line[1]
+                    r2 = line[2]
+                    # set constant if can evaluate
+                    if isinstance(r1, (int, bool)) and isinstance(r2, (int, bool)): # TODO: move to numbering
+                        block.lines[j] = ["movl", r1 == r2 and type(r1) == type(r2), line[3]]
+                        continue
+                    # box r1 if needed
+                    if isinstance(r1, (int, bool)):
+                        box_block = box(r1)
+                        block.lines[j:j] = box_block
+                        j += len(box_block)
+                        r1 = "%eax"
+                    # box r2 if needed
+                    if isinstance(r2, (int, bool)):
+                        box_block = box(r2)
+                        block.lines[j:j] = box_block
+                        j += len(box_block)
+                        r2 = "%eax"
+                    # compare boxed values
+                    block.lines[j] = ["eq", r1, r2, line[3]]
+                    block.lines.insert(j+1, ["call", "inject_bool", [line[3]]])
+                    j += 1
+                    block.lines.insert(j+1, ["movl", "%eax", line[3]])
+                    j += 1
+                elif line[0] == "not":
+                    r1 = line[1]
+                    # set constant if can evaluate
+                    if isinstance(r1, (int, bool)): # TODO: move to numbering
+                        block.lines[j] = ["movl", not r1, line[2]]
+                        continue
+                    block.lines.insert(j, ["call", "is_true", [r1]])
+                    j += 1
+                    block.lines.insert(j, ["xorl", 1, "%eax"])
+                    j += 1
+                    block.lines.insert(j, ["call", "inject_bool", ["%eax"]])
+                    j += 1
+                    block.lines[j] = ["movl","%eax", line[2]]
+                elif line[0] == "call":
+                    for i in range(len(line[2])):
+                        # box constants
+                        if isinstance(line[2][i], bool):
+                            arg = f"t_explicate_{t_explicate_cnt}"
+                            t_explicate_cnt += 1
+                            block.lines.insert(j, ["call", "inject_bool", [int(line[2][i])]])
+                            j += 1
+                            block.lines.insert(j, ["movl", "%eax", arg])
+                            j += 1
+                            block.lines[j][2][i] = arg
+                        elif isinstance(line[2][i], int):
+                            arg = f"t_explicate_{t_explicate_cnt}"
+                            t_explicate_cnt += 1
+                            block.lines.insert(j, ["call", "inject_int", [line[2][i]]])
+                            j += 1
+                            block.lines.insert(j, ["movl", "%eax", arg])
+                            j += 1
+                            block.lines[j][2][i] = arg
+                    call_block = call_box(line[1], line[2])
+                    block.lines[j:j] = call_block
+                    j += len(call_block)
+                    block.lines[j] = ["movl", "%eax", "%eax"]
+
+                j += 1
+    return blocks_dict

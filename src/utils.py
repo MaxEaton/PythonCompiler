@@ -17,10 +17,30 @@ functions = [
     "eval",
     "input",
     "int",
-]
 
-keywords = [
-    "break",
+    "print_any",
+    "eval_input_pyobj",
+    "int",
+    "create_list",
+    "create_dict",
+    "create_closure",
+    "project_int",
+    "project_bool",
+    "project_big",
+    "inject_int",
+    "inject_bool",
+    "inject_big",
+    "is_int",
+    "is_bool",
+    "is_big",
+    "is_true",
+    "add",
+    "equal",
+    "not_equal",
+    "get_subscript",
+    "set_subscript",
+    "get_fun_ptr",
+    "get_free_vars",
 ]
 
 # 0: the indices/reg of write set; removed if in read set
@@ -41,9 +61,13 @@ s_ir_insts = {
     "not": [[2], [1], [2,"%eax"], [], [], [2]],
     "addl": [[], [1,2], [2], [], [1,2], [2]],
     "xorl": [[], [1,2], [2], [], [1,2], [2]],
-    "call": [["%eax"], [2], ["%eax", "%ecx", "%edx"], [], [], []],
+    "call": [["%eax"], [1], ["%eax", "%ecx", "%edx"], [], [], []],
 }
 
+t_uniquify_cnt = 0
+t_heapify_cnt = 0
+t_unify_cnt = 0
+t_closurify_cnt = 0
 t_desugar_cnt = 0
 t_flatten_cnt = 0
 t_explicate_cnt = 0
@@ -55,7 +79,11 @@ while_depth = -1
 explicate_cnt = 0
 
 from parse import *
-from verify import *
+from uniquify import *
+from unify import *
+from free_list import *
+from heapify import *
+from closurify import *
 from desugar import *
 from flatten import *
 from generate_p0 import *

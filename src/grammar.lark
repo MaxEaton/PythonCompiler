@@ -8,13 +8,13 @@ NEWLINE: (/\n[\t ]*/)+
 WHILE.1: "while"
 IF.1: "if"
 ELSE.1: "else"
+DEF.1: "def"
+LAMBDA.1: "lambda"
+RETURN.1: "return"
 AND.1: "and"
 OR.1: "or"
 NOT.1: "not"
 IS.1: "is"
-INT.1: "int"
-EVAL.1: "eval"
-INPUT.1: "input"
 BREAK.1: "break"
 TRUE.1: "True"
 FALSE.1: "False"
@@ -23,36 +23,24 @@ start: module
 
 module: stmt*
 
-stmt: "print" "(" obj ")" NEWLINE         -> print_
-    | expr NEWLINE
+stmt: expr NEWLINE
     | NAME "=" obj NEWLINE                -> assign_
     | subscription "=" obj NEWLINE        -> assign_
     | listionary "=" obj NEWLINE          -> assign_
+    | RETURN obj                          -> return_
     | BREAK NEWLINE
     | if_block
     | while_block
+    | func_block
     | NEWLINE                             -> empty
 
 expr: obj
 
-subscription: term "[" obj "]"
+obj: lmd "(" list_data ")"                -> func_
+   | lmd 
 
-obj: ternary
-
-big: dictionary
-   | listionary
-
-dictionary: "{" dict_data "}"
-
-dict_data:                                -> empty
-         | obj ":" obj                    -> dict_datum
-         | dict_data "," obj ":" obj
-
-listionary: "[" list_data "]"
-
-list_data:                                -> empty
-         | obj                            -> list_datum
-         | list_data "," obj
+lmd: LAMBDA args_data":" obj              -> lmd_
+   | ternary
 
 ternary: or_expr IF or_expr ELSE obj      -> ternary_
        | or_expr
@@ -75,22 +63,46 @@ add_expr: add_expr "+" neg_expr           -> add_
 neg_expr: "-" neg_expr                    -> neg_
         | term
 
-term: "(" obj ")"     
+term: "(" obj ")"  
     | DECIMAL_INT          
     | NAME          
-    | EVAL "(" INPUT "(" ")" ")"          -> evalinput_
-    | INT "(" obj ")"                     -> int_
     | TRUE                                -> true_
     | FALSE                               -> false_
+    | func              
     | subscription
     | big
+
+func: (NAME | func) "(" list_data ")"     -> func_
 
 comp_op: "=="                             -> eq_
        | "!="                             -> ne_
        | IS                               -> is_
+
+subscription: term "[" obj "]"
+
+big: dictionary
+   | listionary
+
+dictionary: "{" dict_data "}"
+
+dict_data:                                -> empty
+         | obj ":" obj                    -> dict_datum
+         | dict_data "," obj ":" obj
+
+listionary: "[" list_data "]"
+
+list_data:                                -> empty
+         | obj                            -> list_datum
+         | list_data "," obj
+
+args_data:                                -> empty
+         | NAME                           -> arg_
+         | args_data "," obj
 
 suite: _INDENT stmt+ _DEDENT
 
 if_block: IF obj ":" NEWLINE suite [ELSE ":" NEWLINE suite]
 
 while_block: WHILE obj ":" NEWLINE suite [ELSE ":" NEWLINE suite]
+
+func_block: DEF NAME"(" args_data ")" ":" NEWLINE suite
