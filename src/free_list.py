@@ -3,12 +3,6 @@
 from utils import *
 
 def name_of(node):
-    '''
-    Finds name of given function or variable
-
-    :param node: an AST node
-    :return: a node name or node value
-    '''
     if isinstance(node, Name):
         return node.id
     return name_of(node.value)
@@ -23,31 +17,34 @@ def free_list(node, args=set()):
     :return: the free list heap
     '''
     if isinstance(node, Module):
-        free_list.used = set() 
+        free_list.used = set()
         free_list.bound = set(functions) | args
+        if not hasattr(free_list, 'classes'):
+            free_list.classes = set()
+        for x in node.body: 
+            if isinstance(x, ClassDef):
+                free_list(x)
         for x in node.body: 
             if isinstance(x, FunctionDef):
                 free_list(x)
         for x in node.body: 
-            if not isinstance(x, FunctionDef): 
+            if not isinstance(x, (ClassDef, FunctionDef)): 
                 free_list(x)
-        # heap to track variables used in function definitions
-        free_list.heap = set() 
+        free_list.heap = set()
         for x in node.body:
             if isinstance(x, FunctionDef):
-                # heaped variables are the intersection of bound and free variables
-                free_list.heap |= (free_list.bound & x.free) 
-                # discard function name from used variables
-                free_list.used.discard(x.name) 
-        # free variables are those that are used but not bound
-        free_list.free = free_list.used - free_list.bound 
+                free_list.heap |= (free_list.bound & x.free)
+                free_list.used.discard(x.name)
+        free_list.free = free_list.used - free_list.bound
+        free_list.heap -= free_list.classes
+        free_list.free -= free_list.classes
         return node, free_list.heap
     elif isinstance(node, Assign):
         free_list(node.targets[0])
         free_list(node.value)
     elif isinstance(node, Expr):
         free_list(node.value)
-    elif isinstance(node, (Constant, Break)):
+    elif isinstance(node, (Constant, Pass, Break)):
         pass
     elif isinstance(node, Name):
         if isinstance(node.ctx, Load):
@@ -83,20 +80,23 @@ def free_list(node, args=set()):
         for value in node.values: free_list(value)
     elif isinstance(node, List):
         for elt in node.elts: free_list(elt)
+    elif isinstance(node, Attribute):
+        free_list(node.value)
     elif isinstance(node, Return):
         free_list(node.value)
     elif isinstance(node, FunctionDef):
         free_list.bound.add(node.name)
         curr_used = free_list.used
-        curr_bound = set(free_list.bound)
+        curr_bound = free_list.bound
         free_list(Module(body=node.body), set([arg.arg for arg in node.args.args]))
-        # remove arguments from free list
-        for arg in node.args.args: free_list.free.discard(arg.arg) 
+        for arg in node.args.args: free_list.free.discard(arg.arg)
         node.free = free_list.free
         node.heap = free_list.heap
         free_list.used = curr_used
-        # add free variables to used set
-        free_list.used |= free_list.free 
+        free_list.used |= free_list.free
         free_list.bound = curr_bound
+    elif isinstance(node, ClassDef):
+        free_list.classes.add(node.name)
+        for base in node.bases: free_list(base)
     else:
         raise Exception(f"free_list: unrecognized AST node {node}")

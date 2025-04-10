@@ -23,7 +23,7 @@ def unify(node):
         return Expr(
             value=unify(node.value)
         )
-    elif isinstance(node, (Constant, Name, Break)):
+    elif isinstance(node, (Constant, Name, Pass, Break)):
         return node
     elif isinstance(node, BinOp):
         return BinOp(
@@ -87,6 +87,12 @@ def unify(node):
             elts=[unify(elt) for elt in node.elts],
             ctx=node.ctx
         )
+    elif isinstance(node, Attribute):
+        return Attribute(
+            value=unify(node.value),
+            attr=node.attr,
+            ctx=node.ctx
+        )
     elif isinstance(node, Return):
         return Return(
             value=unify(node.value),
@@ -97,8 +103,7 @@ def unify(node):
         curr_module = unify.module
         body = unify(Module(body=[Return(value=node.body)])).body
         unify.module = curr_module
-        # insert lambda function as a function at beginning of module
-        unify.module.body.insert(0, FunctionDef( 
+        unify.module.body.insert(0, FunctionDef(
             name=f"t_lambda{curr}",
             args=node.args,
             body=body
@@ -113,8 +118,7 @@ def unify(node):
         curr_module = unify.module
         body = unify(Module(body=node.body)).body
         unify.module = curr_module
-        # insert function as a function at beginning of module
-        unify.module.body.insert(0, FunctionDef( 
+        unify.module.body.insert(0, FunctionDef(
             name=f"t_lambda{curr}",
             args=node.args,
             body=body
@@ -122,6 +126,12 @@ def unify(node):
         return Assign(
             targets=[Name(id=node.name, ctx=Store())],
             value=Name(id=f"t_lambda{curr}", ctx=Load())
+        )
+    elif isinstance(node, ClassDef):
+        return ClassDef(
+            name=node.name,
+            bases=[unify(base) for base in node.bases],
+            body=node.body,
         )
     else:
         raise Exception(f"desugar: unrecognized AST node {node}")

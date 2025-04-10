@@ -28,16 +28,17 @@ def interference(blocks_dict):
             for liveness_var in block.liveness_arr:
                 for l in liveness_var:
                     if l not in interference_graph: interference_graph[l] = set()
-
+        
         # add two way interference between arguments
         for i in args:
+            if not i in interference_graph: continue
             for j in args:
-                if i != j: interference_graph[i].add(j)
+                if i != j and j in interference_graph: interference_graph[i].add(j)
         for i in args:
+            if not i in interference_graph: continue
             for j in ["%eax", "%ecx", "%edx", "%ebx", "%edi", "%esi"]:
                 interference_graph[i].add(j)
                 interference_graph[j].add(i)
-        print(interference_graph)
 
         # add two way interference if in whitelist but not in blacklist 
         for block in blocks:

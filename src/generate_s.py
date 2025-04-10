@@ -2,6 +2,15 @@
 
 from utils import *
 
+def get_name(var, home_dict, str_list):
+    if isinstance(var, int):
+        return f"${var}"
+    elif var in home_dict:
+        return home_dict[var]
+    else:
+        str_list.add(var)
+        return f"${var}"
+
 def generate_s(blocks_dict, color_dict):
     '''
     Traverse X86 IR and convert to X86
@@ -11,6 +20,8 @@ def generate_s(blocks_dict, color_dict):
     :return: a string that represents the equivalent X86 representation to the X86 IR
     '''
     prog_s = ""
+    # store attr names
+    str_list = set()
     for func, (blocks, args) in blocks_dict.items():
         # assign homes based on provided colors
         home_dict = {}
@@ -49,8 +60,8 @@ def generate_s(blocks_dict, color_dict):
                     # optimize out if not assigned a home or is a register
                     if (not isinstance(line[1], int) and line[1] not in home_dict) or (not isinstance(line[2], int) and line[2] not in home_dict): continue
                     # get registers from homes or directly from line
-                    r1 = home_dict[line[1]] if not isinstance(line[1], int) else f"${line[1]}"
-                    r2 = home_dict[line[2]] if not isinstance(line[2], int) else f"${line[2]}"
+                    r1 = get_name(line[1], home_dict, str_list)
+                    r2 = get_name(line[2], home_dict, str_list)
                     # optimize out redundant moves
                     if line[0] in ["movl"] and r1 == r2: continue
                     prog_s += f"  {line[0]} {r1}, {r2}\n"
@@ -58,7 +69,7 @@ def generate_s(blocks_dict, color_dict):
                     # optimize out if not assigned a home or is a register
                     if (not isinstance(line[1], int) and line[1] not in home_dict): continue
                     # get registers from homes or directly from line
-                    r1 = home_dict[line[1]] if not isinstance(line[1], int) else f"${line[1]}"
+                    r1 = get_name(line[1], home_dict, str_list)
                     prog_s += f"  {line[0]} {r1}\n"
                 elif line[0] in ["call"]:
                     function = line[1] if line[1] in functions else f"*{home_dict[line[1]]}"
@@ -68,7 +79,7 @@ def generate_s(blocks_dict, color_dict):
                         prog_s += f"  pop {home_dict[line[2][0]]}\n"
                         prog_s += f"  addl $({line[2][0]} - .get_pc{line[2][0][-1]}), {home_dict[line[2][0]]}\n"
                     for arg in reversed(line[2]):
-                        arg = home_dict[arg] if not isinstance(arg, (int, bool, list, dict)) else f"${arg}"
+                        arg = get_name(arg, home_dict, str_list)
                         prog_s += f"  pushl {arg}\n"
                     prog_s += f"  {line[0]} {function}\n"
                     prog_s += f"  addl ${4*len(line[2])}, %esp\n"
@@ -76,9 +87,9 @@ def generate_s(blocks_dict, color_dict):
                     # optimize out if not assigned a home or is a register
                     if (not isinstance(line[1], int) and line[1] not in home_dict) or (not isinstance(line[2], int) and line[2] not in home_dict) or (not isinstance(line[3], int) and line[3] not in home_dict): continue
                     # get registers from homes or directly from line
-                    r1 = home_dict[line[1]] if not isinstance(line[1], int) else f"${line[1]}"
-                    r2 = home_dict[line[2]] if not isinstance(line[2], int) else f"${line[2]}"
-                    r3 = home_dict[line[3]] if not isinstance(line[3], int) else f"${line[3]}"
+                    r1 = get_name(line[1], home_dict, str_list)
+                    r2 = get_name(line[2], home_dict, str_list)
+                    r3 = get_name(line[3], home_dict, str_list)
                     if r2[0] == "$": prog_s += f"  cmpl {r2}, {r1}\n"
                     else: prog_s += f"  cmpl {r1}, {r2}\n"
                     # sete or setne for eq vs ne
@@ -104,4 +115,10 @@ def generate_s(blocks_dict, color_dict):
             "  ret\n"
         )
     
+    data_section = ".section .data\n"
+    for var in str_list:
+        data_section += f"{var}:\n  .asciz \"{var}\"\n"
+    data_section += ".section .text\n"
+    prog_s = data_section + prog_s
+
     return prog_s

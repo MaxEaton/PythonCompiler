@@ -35,6 +35,7 @@ def flatten(node):
     :param node: a node of the AST to flatten
     :return: a module that represents the equivalent Python representation to the AST
     '''
+    global t_flatten_cnt
     if isinstance(node, Module):
         flatten.module = Module(body=[], type_ignores=[])
         for x in node.body: flatten.module.body.append(flatten(x))
@@ -42,7 +43,7 @@ def flatten(node):
     elif isinstance(node, Assign):
         return Assign(
             targets=[flatten(target) for target in node.targets],
-            value=flatten(node.value)
+            value=simplify(node.value)
         )
     elif isinstance(node, Expr):
         return Expr(
@@ -90,6 +91,12 @@ def flatten(node):
             elts=[simplify(elt) for elt in node.elts],
             ctx=node.ctx
         )
+    elif isinstance(node, Attribute):
+        return Attribute(
+            value=simplify(node.value),
+            attr=node.attr,
+            ctx=node.ctx
+        )
     elif isinstance(node, (If, While)):
         # save current static module and create new submodules
         # revert to static module and return node with submodules 
@@ -113,5 +120,13 @@ def flatten(node):
             args=node.args,
             body=body
         )
+    elif isinstance(node, ClassDef):
+        return ClassDef(
+            name=node.name,
+            bases=[flatten(base) for base in node.bases],
+            body=node.body,
+        )
+    elif isinstance(node, (Pass)):
+        return node
     else:
         raise Exception(f"flatten: unrecognized AST node {node}")

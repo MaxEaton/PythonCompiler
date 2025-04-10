@@ -26,20 +26,17 @@ def heapify(node, free=None, heap=None):
     if isinstance(node, Module):
         heapify.free = free
         heapify.heap = heap
-        # initalize each heap variable
-        heapify.module = Module(body=[ 
+        heapify.module = Module(body=[
             Assign(
                 targets=[Name(id=var, ctx=Store())],
                 value=List(elts=[Name(id=var, ctx=Load()) if var.startswith("arg_") else Constant(value=0)], ctx=Load())
             )
             for var in heapify.heap
         ], type_ignores=[])
-        # heapify all free variables
         for x in node.body: heapify.module.body.append(heapify(x))
         return heapify.module
     elif isinstance(node, Assign):
-        # convert heap assignment to subscripted assignment
-        if name_of(node.targets[0]) in heapify.heap: 
+        if name_of(node.targets[0]) in heapify.heap:
             return Assign(
                 targets=[Subscript(
                     value=node.targets[0],
@@ -56,10 +53,11 @@ def heapify(node, free=None, heap=None):
         return Expr(
             value=heapify(node.value)
         )
-    elif isinstance(node, (Constant, Break)):
+    elif isinstance(node, (Constant, Pass, Break)):
         return node
     elif isinstance(node, Name):
         if node.id in heapify.free | heapify.heap:
+            print(node.id, heapify.free, heapify.heap)
             return Subscript(
                 value=node,
                 slice=Constant(value=0),
@@ -128,23 +126,34 @@ def heapify(node, free=None, heap=None):
             elts=[heapify(elt) for elt in node.elts],
             ctx=node.ctx
         )
+    elif isinstance(node, Attribute):
+        return Attribute(
+            value=heapify(node.value),
+            attr=node.attr,
+            ctx=node.ctx
+        )
     elif isinstance(node, Return):
         return Return(
             value=heapify(node.value)
         )
     elif isinstance(node, FunctionDef):
-        curr_heap = set(heapify.heap)
+        curr_heap = heapify.heap
         curr_module = heapify.module
         body = heapify(Module(body=node.body), node.free, node.heap).body
         heapify.heap = curr_heap
         heapify.module = curr_module
-        # rewrite function definition with new parameters
-        return FunctionDef( 
+        return FunctionDef(
             name=node.name,
             args=node.args,
             body=body,
             free=node.free,
             heap=node.heap
+        )
+    elif isinstance(node, ClassDef):
+        return ClassDef(
+            name=node.name,
+            bases=[heapify(base) for base in node.bases],
+            body=node.body,
         )
     else:
         raise Exception(f"heapify: unrecognized AST node {node}")

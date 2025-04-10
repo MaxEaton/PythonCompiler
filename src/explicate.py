@@ -14,31 +14,31 @@ def do_op(i1, i2, i3, register):
     global explicate_cnt
     explicate_cnt += 1
     return [
-        ["call", "is_int", [register]], #check if int
-        ["cmpl", 1, "%eax"], #check if int
-        ["je", f"if_int{explicate_cnt-1}"], #jump if int
-        ["call", "is_bool", [register]], #check if bool
-        ["cmpl", 1, "%eax"], #check if bool
-        ["je", f"if_bool{explicate_cnt-1}"], #jump if bool
-        ["call", "is_big", [register]], #check if big
-        ["cmpl", 1, "%eax"], #check if big
-        ["je", f"if_big{explicate_cnt-1}"], #jump if big
-        [f"if_int{explicate_cnt-1}"], #if int
+        ["call", "is_int", [register]],
+        ["cmpl", 1, "%eax"],
+        ["je", f"if_int{explicate_cnt-1}"],
+        ["call", "is_bool", [register]],
+        ["cmpl", 1, "%eax"],
+        ["je", f"if_bool{explicate_cnt-1}"],
+        ["call", "is_big", [register]],
+        ["cmpl", 1, "%eax"],
+        ["je", f"if_big{explicate_cnt-1}"],
+        [f"if_int{explicate_cnt-1}"],
         ["call", "project_int", [register]],
         i1,
         ["call", "inject_int", ["%eax"]],
-        ["jmp", f"explicate_end{explicate_cnt-1}"], #jump to end
-        [f"if_bool{explicate_cnt-1}"], #if bool
+        ["jmp", f"explicate_end{explicate_cnt-1}"],
+        [f"if_bool{explicate_cnt-1}"],
         ["call", "project_bool", [register]],
         i2,
         ["call", "inject_int", ["%eax"]],
-        ["jmp", f"explicate_end{explicate_cnt-1}"], #jump to end
-        [f"if_big{explicate_cnt-1}"], #if big
+        ["jmp", f"explicate_end{explicate_cnt-1}"],
+        [f"if_big{explicate_cnt-1}"],
         ["call", "project_big", [register]],
         i3,
         ["call", "inject_big", ["%eax"]],
-        ["jmp", f"explicate_end{explicate_cnt-1}"], #jump to end
-        [f"explicate_end{explicate_cnt-1}"] #end
+        ["jmp", f"explicate_end{explicate_cnt-1}"],
+        [f"explicate_end{explicate_cnt-1}"]
     ]
 
 def unbox(source, dest):
@@ -52,25 +52,25 @@ def unbox(source, dest):
     global explicate_cnt
     explicate_cnt += 1
     return [
-        ["call", "is_int", [source]], #check if int
-        ["cmpl", 1, "%eax"], #check if int
-        ["je", f"if_int{explicate_cnt-1}"], #jump if int
-        ["call", "is_bool", [source]], #check if bool
-        ["cmpl", 1, "%eax"], #check if bool
-        ["je", f"if_bool{explicate_cnt-1}"], #jump if bool
-        ["call", "is_big", [source]], #check if big
-        ["cmpl", 1, "%eax"], #check if big
-        ["je", f"if_big{explicate_cnt-1}"], #jump if big
-        [f"if_int{explicate_cnt-1}"], #if int
+        ["call", "is_int", [source]],
+        ["cmpl", 1, "%eax"],
+        ["je", f"if_int{explicate_cnt-1}"],
+        ["call", "is_bool", [source]],
+        ["cmpl", 1, "%eax"],
+        ["je", f"if_bool{explicate_cnt-1}"],
+        ["call", "is_big", [source]],
+        ["cmpl", 1, "%eax"],
+        ["je", f"if_big{explicate_cnt-1}"],
+        [f"if_int{explicate_cnt-1}"],
         ["call", "project_int", [source]],
-        ["jmp", f"explicate_end{explicate_cnt-1}"], #jump to end
-        [f"if_bool{explicate_cnt-1}"], #if bool
+        ["jmp", f"explicate_end{explicate_cnt-1}"],
+        [f"if_bool{explicate_cnt-1}"],
         ["call", "project_bool", [source]],
-        ["jmp", f"explicate_end{explicate_cnt-1}"], #jump to end
-        [f"if_big{explicate_cnt-1}"], #if big
+        ["jmp", f"explicate_end{explicate_cnt-1}"],
+        [f"if_big{explicate_cnt-1}"],
         ["call", "project_big", [source]],
-        ["jmp", f"explicate_end{explicate_cnt-1}"], #jump to end
-        [f"explicate_end{explicate_cnt-1}"], #end
+        ["jmp", f"explicate_end{explicate_cnt-1}"],
+        [f"explicate_end{explicate_cnt-1}"],
         ["movl", "%eax", dest]
     ]
 
@@ -123,6 +123,10 @@ def box(source):
         ret.append(["movl", pyobj_tmp, "%eax"])
         return ret
     elif isinstance(source, tuple):
+        if isinstance(source[1], tuple):
+            return [
+                ["call", "get_attr", [source[0], source[1][0]]]
+            ]
         return [
             *box(source[1]),
             ["call", "get_subscript", [source[0], "%eax"]]
@@ -212,19 +216,75 @@ def call_box(func, args):
     t_explicate_cnt += 1
     free_vars = f"t_explicate_{t_explicate_cnt}"
     t_explicate_cnt += 1
+    bounder = f"t_explicate_{t_explicate_cnt}"
+    t_explicate_cnt += 1
     return [
         ["call", "is_big", [func]],
         ["cmpl", 1, "%eax"],
         ["je", f"func_big{curr_cnt}"],
+
+        # built in functions like print
         ["call", func, args],
         ["jmp", f"call_end{curr_cnt}"],
 
+        # switch between class, function bound, or unbound
         [f"func_big{curr_cnt}"],
+        ["call", "is_class", [func]],
+        ["cmpl", 1, "%eax"],
+        ["je", f"func_class{curr_cnt}"],
+        ["call", "is_function", [func]],
+        ["cmpl", 1, "%eax"],
+        ["je", f"func_function{curr_cnt}"],
+        ["call", "is_bound_method", [func]],
+        ["cmpl", 1, "%eax"],
+        ["je", f"func_bound{curr_cnt}"],
+        ["call", "is_unbound_method", [func]],
+        ["cmpl", 1, "%eax"],
+        ["je", f"func_unbound{curr_cnt}"],
+
+        # unbound
+        [f"func_unbound{curr_cnt}"],
+        ["call", "get_function", [func]],
+        ["movl", "%eax", func],
+        ["call", "inject_big", [func]],
+        ["movl", "%eax", func],
         ["call", "get_fun_ptr", [func]],
         ["movl", "%eax", fun_ptr],
         ["call", "get_free_vars", [func]],
         ["movl", "%eax", free_vars],
         ["call", fun_ptr, [free_vars, *args]],
+        ["jmp", f"call_end{curr_cnt}"],
+
+        # bound
+        [f"func_bound{curr_cnt}"],
+        ["call", "get_receiver", [func]],
+        ["movl", "%eax", bounder],
+        ["call", "inject_big", [bounder]],
+        ["movl", "%eax", bounder],
+        ["call", "get_function", [func]],
+        ["movl", "%eax", func],
+        ["call", "inject_big", [func]],
+        ["movl", "%eax", func],
+        ["call", "get_fun_ptr", [func]],
+        ["movl", "%eax", fun_ptr],
+        ["call", "get_free_vars", [func]],
+        ["movl", "%eax", free_vars],
+        ["call", fun_ptr, [free_vars, bounder, *args]],
+        ["jmp", f"call_end{curr_cnt}"],
+
+        # function
+        [f"func_function{curr_cnt}"],
+        ["call", "get_fun_ptr", [func]],
+        ["movl", "%eax", fun_ptr],
+        ["call", "get_free_vars", [func]],
+        ["movl", "%eax", free_vars],
+        ["call", fun_ptr, [free_vars, *args]],
+        ["jmp", f"call_end{curr_cnt}"],
+
+        # class
+        [f"func_class{curr_cnt}"],
+        ["call", "create_object", [func]],
+        ["call", "inject_big", ["%eax"]],
 
         [f"call_end{curr_cnt}"],
     ]
@@ -252,14 +312,17 @@ def explicate(blocks_dict):
                         line[1] = "%eax"
                     # call for set subscript
                     if isinstance(line[2], tuple):
-                        r1 = f"t_explicate_{t_explicate_cnt}"
-                        t_explicate_cnt += 1
-                        block.lines.insert(j, ["movl", line[1], r1])
-                        j += 1
-                        box_block = box(line[2][1])
-                        block.lines[j:j] = box_block
-                        j += len(box_block)
-                        block.lines[j] = ["call", "set_subscript", [line[2][0], "%eax", r1]]
+                        if isinstance(line[2][1], tuple):
+                            block.lines[j] = ["call", "set_attr", [line[2][0], line[2][1][0], line[1]]]
+                        else:
+                            r1 = f"t_explicate_{t_explicate_cnt}"
+                            t_explicate_cnt += 1
+                            block.lines.insert(j, ["movl", line[1], r1])
+                            j += 1
+                            box_block = box(line[2][1])
+                            block.lines[j:j] = box_block
+                            j += len(box_block)
+                            block.lines[j] = ["call", "set_subscript", [line[2][0], "%eax", r1]]
                 elif line[0] == "addl":
                     r1 = line[1]
                     # unbox if variable
@@ -284,32 +347,6 @@ def explicate(blocks_dict):
                 elif line[0] in ["eq", "ne"]:
                     r1 = line[1]
                     r2 = line[2]
-                    # set constant if can evaluate
-                    if isinstance(r1, (int, bool)) and isinstance(r2, (int, bool)): # TODO: move to numbering
-                        if line[0] == "eq": block.lines[j] = ["movl", r1 == r2, line[3]]
-                        else: block.lines[j] = ["movl", r1 != r2, line[3]]
-                        continue
-                    # box r1 if needed
-                    if isinstance(r1, (int, bool)):
-                        r1_new = f"t_explicate_{t_explicate_cnt}"
-                        t_explicate_cnt += 1
-                        box_block = box(r1)
-                        block.lines[j:j] = box_block
-                        j += len(box_block)
-                        block.lines.insert(j, ["movl", "%eax", r1_new])
-                        j += 1
-                        r1 = r1_new
-                    # box r2 if needed
-                    if isinstance(r2, (int, bool)):
-                        r2_new = f"t_explicate_{t_explicate_cnt}"
-                        t_explicate_cnt += 1
-                        box_block = box(r2)
-                        block.lines[j:j] = box_block
-                        j += len(box_block)
-                        block.lines.insert(j, ["movl", "%eax", r2_new])
-                        j += 1
-                        r2 = r2_new
-                    # compare based on unboxed values
                     cmpl_block = cmpl_box(r1, r2, line[0])
                     block.lines[j:j] = cmpl_block
                     j += len(cmpl_block)
@@ -317,23 +354,6 @@ def explicate(blocks_dict):
                 elif line[0] == "is":
                     r1 = line[1]
                     r2 = line[2]
-                    # set constant if can evaluate
-                    if isinstance(r1, (int, bool)) and isinstance(r2, (int, bool)): # TODO: move to numbering
-                        block.lines[j] = ["movl", r1 == r2 and type(r1) == type(r2), line[3]]
-                        continue
-                    # box r1 if needed
-                    if isinstance(r1, (int, bool)):
-                        box_block = box(r1)
-                        block.lines[j:j] = box_block
-                        j += len(box_block)
-                        r1 = "%eax"
-                    # box r2 if needed
-                    if isinstance(r2, (int, bool)):
-                        box_block = box(r2)
-                        block.lines[j:j] = box_block
-                        j += len(box_block)
-                        r2 = "%eax"
-                    # compare boxed values
                     block.lines[j] = ["eq", r1, r2, line[3]]
                     block.lines.insert(j+1, ["call", "inject_bool", [line[3]]])
                     j += 1
@@ -341,10 +361,6 @@ def explicate(blocks_dict):
                     j += 1
                 elif line[0] == "not":
                     r1 = line[1]
-                    # set constant if can evaluate
-                    if isinstance(r1, (int, bool)): # TODO: move to numbering
-                        block.lines[j] = ["movl", not r1, line[2]]
-                        continue
                     block.lines.insert(j, ["call", "is_true", [r1]])
                     j += 1
                     block.lines.insert(j, ["xorl", 1, "%eax"])

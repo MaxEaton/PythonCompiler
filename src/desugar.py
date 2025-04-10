@@ -34,7 +34,7 @@ def desugar(node):
         return Expr(
             value=desugar(node.value)
         )
-    elif isinstance(node, (Constant, Name, Break)):
+    elif isinstance(node, (Constant, Name, Pass, Break)):
         return node
     elif isinstance(node, BinOp):
         return BinOp(
@@ -127,6 +127,12 @@ def desugar(node):
             elts=[desugar(elt) for elt in node.elts],
             ctx=node.ctx
         )
+    elif isinstance(node, Attribute):
+        return Attribute(
+            value=desugar(node.value),
+            attr=node.attr,
+            ctx=node.ctx
+        )
     elif isinstance(node, Return):
         return Return(
             value=desugar(node.value),
@@ -139,6 +145,12 @@ def desugar(node):
             name=node.name,
             args=node.args,
             body=body
+        )
+    elif isinstance(node, ClassDef):
+        return ClassDef(
+            name=node.name,
+            bases=[desugar(base) for base in node.bases],
+            body=node.body,
         )
     else:
         raise Exception(f"desugar: unrecognized AST node {node}")

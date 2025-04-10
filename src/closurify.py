@@ -23,7 +23,7 @@ def closurify(node):
         return Expr(
             value=closurify(node.value)
         )
-    elif isinstance(node, (Constant, Name, Break)):
+    elif isinstance(node, (Constant, Name, Pass, Break)):
         return node
     elif isinstance(node, BinOp):
         return BinOp(
@@ -88,6 +88,12 @@ def closurify(node):
             elts=[closurify(elt) for elt in node.elts],
             ctx=node.ctx
         )
+    elif isinstance(node, Attribute):
+        return Attribute(
+            value=closurify(node.value),
+            attr=node.attr,
+            ctx=node.ctx
+        )
     elif isinstance(node, Return):
         return Return(
             value=closurify(node.value),
@@ -95,8 +101,7 @@ def closurify(node):
     elif isinstance(node, FunctionDef):
         curr = t_closurify_cnt
         t_closurify_cnt += 1
-        # create assignments for every free variable
-        assignment = [ 
+        assignment = [
             Assign(
                 targets=[Name(id=var, ctx=Store())],
                 value=Subscript(
@@ -110,15 +115,13 @@ def closurify(node):
         curr_module = closurify.module
         body = closurify(Module(body=node.body)).body
         closurify.module = curr_module
-        # add free_vars as function arguement
-        node.args.args.insert(0, arg(arg="free_vars")) 
+        node.args.args.insert(0, arg(arg="free_vars"))
         closurify.module.body.insert(0, FunctionDef(
             name=f"t_fun{curr}",
             args=node.args,
             body=[*assignment, *body]
         ))
-        # replace original function with closure creation call
-        return Assign( 
+        return Assign(
             targets=[Name(id=node.name, ctx=Store())],
             value=Call(
                 func=Name(id=f"create_closure", ctx=Load()),
@@ -129,5 +132,12 @@ def closurify(node):
                 keywords=[]
             )
         )
+    elif isinstance(node, ClassDef):
+        closurify.module.body.insert(0, ClassDef(
+            name=node.name,
+            bases=[closurify(base) for base in node.bases],
+            body=node.body,
+        ))
+        return Pass()
     else:
         raise Exception(f"closurify: unrecognized AST node {node}")

@@ -17,8 +17,10 @@ if __name__ == "__main__":
     parser = Lark(prog_lark, parser="lalr", start="module", debug=True, transformer=ToAst(), postlex=PyIndenter())
     
     tree = parser.parse(prog_py)
-    tree = uniquify(tree)
-    
+
+    tree = declassify(tree)
+    tree = uniqify(tree)
+
     tree = unify(tree)
     tree, main_heap = free_list(tree)
     tree = heapify(tree, set(), main_heap)
@@ -31,7 +33,7 @@ if __name__ == "__main__":
     path_flat = (path_py)[:-3] + ".flatpy"
     with open(path_flat, "w") as file_flat: file_flat.write(prog_flat)
     print(f"Wrote to: {path_flat}")
-
+    
     s_ir_arr_dict = s_ir(tree)
     blocks_dict = cfg(s_ir_arr_dict)
     blocks_dict = explicate(blocks_dict)

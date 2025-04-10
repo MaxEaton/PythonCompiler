@@ -24,6 +24,10 @@ functions = [
     "create_list",
     "create_dict",
     "create_closure",
+    "create_bound_method",
+    "create_unbound_method",
+    "create_class",
+    "create_object",
     "project_int",
     "project_bool",
     "project_big",
@@ -33,14 +37,23 @@ functions = [
     "is_int",
     "is_bool",
     "is_big",
+    "is_class",
+    "is_function",
+    "is_bound_method",
+    "is_unbound_method",
     "is_true",
     "add",
     "equal",
     "not_equal",
     "get_subscript",
     "set_subscript",
+    "get_function",
     "get_fun_ptr",
     "get_free_vars",
+    "get_receiver",
+    "has_attr",
+    "get_attr",
+    "set_attr",
 ]
 
 # 0: the indices/reg of write set; removed if in read set
@@ -64,7 +77,8 @@ s_ir_insts = {
     "call": [["%eax"], [1], ["%eax", "%ecx", "%edx"], [], [], []],
 }
 
-t_uniquify_cnt = 0
+t_declassify_cnt = 0
+t_uniqify_cnt = 0
 t_heapify_cnt = 0
 t_unify_cnt = 0
 t_closurify_cnt = 0
@@ -79,7 +93,8 @@ while_depth = -1
 explicate_cnt = 0
 
 from parse import *
-from uniquify import *
+from declassify import *
+from uniqify import *
 from unify import *
 from free_list import *
 from heapify import *

@@ -16,6 +16,7 @@ def s_ir(tree):
         if isinstance(node, Constant): return node.value
         elif isinstance(node, Name): return node.id
         elif isinstance(node, Subscript): return (value(node.value), value(node.slice))
+        elif isinstance(node, Attribute): return (node.value.id, (node.attr,))
         raise Exception(f"s_ir: unrecognized AST node {node}")
     
     def call(func, args):
@@ -26,19 +27,20 @@ def s_ir(tree):
             "eval": "eval_input_pyobj",
             "int": "int",
             "create_closure": "create_closure",
+            "create_class": "create_class",
             "get_fun_ptr": "get_fun_ptr",
             "get_free_vars": "get_free_vars",
         }
-        name = name_map.get(func.id, func.id)
+        name = name_map.get(value(func), value(func))
         args = [] if name == "eval_input_pyobj" else [value(arg) for arg in args]
         if name == "int": 
             return [
                 ["call", "project_bool", args],
                 ["call", "inject_int", ["%eax"]],
             ]
-        elif name == "create_closure":
+        elif name in ["create_closure", "create_class"]:
             return [
-                ["call", "create_closure", args],
+                ["call", name, args],
                 ["call", "inject_big", ["%eax"]],
             ]
         else:
@@ -63,7 +65,7 @@ def s_ir(tree):
         
     def while_loop(body):
         # record depth for break and revert
-        # sandwich interior with jumps and labels
+        # sanwhich interior with jumps and labels
         global while_cnt, while_depth
         cnt = while_cnt
         prv = while_depth
@@ -119,6 +121,8 @@ def s_ir(tree):
             return [["movl", {value(k): value(v) for k, v in zip(node.keys, node.values)}, dest]]
         elif isinstance(node, List):
             return [["movl", [value(elt) for elt in node.elts], dest]]
+        elif isinstance(node, Attribute):
+            return [["movl", value(node), dest]]
         else:
             raise Exception(f"s_ir: unrecognized AST node {node}")
         
@@ -136,6 +140,8 @@ def s_ir(tree):
             s_ir_arr_dict["main"][0].extend(ifelse(node.test, node.body, node.orelse))
         elif isinstance(node, While):
             s_ir_arr_dict["main"][0].extend(while_loop(node.body))
+        elif isinstance(node, Pass):
+            pass
         elif isinstance(node, Break):
             if while_depth == -1:
                 raise Exception(f"s_ir: break not in while")
@@ -146,6 +152,16 @@ def s_ir(tree):
             inner_dict = s_ir(Module(body=node.body))
             inner_dict[node.name] = (inner_dict.pop("main")[0], [arg.arg for arg in node.args.args])
             s_ir_arr_dict.update(inner_dict)
+        elif isinstance(node, ClassDef):
+            bases = [base.id for base in node.bases]
+            base_list = f"t_ir{t_ir_cnt}"
+            t_ir_cnt += 1
+            s_ir_arr_dict["main"][0].extend([
+                ["movl", bases, base_list],
+                ["call", "create_class", [base_list]],
+                ["call", "inject_big", ["%eax"]],
+                ["movl", "%eax", node.name],
+            ])
         else:
             raise Exception(f"s_ir: unrecognized AST node {node}")
     

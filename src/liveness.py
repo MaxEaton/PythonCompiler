@@ -40,7 +40,10 @@ def liveness(blocks_dict):
                     for w in s_ir_inst[0]:
                         w = get_key(line, w)
                         if isinstance(w, (int, bool, list, dict, tuple)):
-                            if isinstance(r, (list, tuple)):
+                            if isinstance(r, tuple):
+                                if not isinstance(r[0], (int, bool, list, dict, tuple)):
+                                    curr.discard(r[0])
+                            elif isinstance(r, list):
                                 for r_ in r:
                                     if not isinstance(r, (int, bool, list, dict, tuple)):
                                         curr.discard(r_)
@@ -54,9 +57,13 @@ def liveness(blocks_dict):
                             curr.discard(w)
                     targets = range(len(line[2])) if line[0] == "call" else s_ir_inst[1]
                     for r in targets:
+                        if line[0] == "call" and line[1] in ["get_attr", "set_attr", "has_attr"] and r == 1: continue
                         r = get_key(line[2], r) if line[0] == "call" else get_key(line, r)
                         if isinstance(r, (int, bool, list, dict, tuple)):
-                            if isinstance(r, (list, tuple)):
+                            if isinstance(r, tuple):
+                                if not isinstance(r[0], (int, bool, list, dict, tuple)):
+                                    curr.add(r[0])
+                            elif isinstance(r, list):
                                 for r_ in r:
                                     if not isinstance(r_, (int, bool, list, dict, tuple)):
                                         curr.add(r_)
@@ -78,7 +85,7 @@ def liveness(blocks_dict):
         
         if blocks[0].liveness_arr[0]:
             for missing in blocks[0].liveness_arr[0]:
-                if not missing.startswith("t_fun") and missing not in functions and missing != "free_vars" and not missing.startswith("arg_"):
+                if not isinstance(missing, tuple) and not missing.startswith("t_fun") and not missing.startswith("s_t_class") and missing not in functions and missing != "free_vars" and not missing.startswith("arg_"):
                     raise Exception(f"liveness: uninitialize variables {missing} in {func}")
         
     return blocks_dict

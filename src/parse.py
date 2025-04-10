@@ -143,6 +143,13 @@ class ToAst(Transformer):
     def big(self, args):
         return args[0]
     
+    def attribute(self, args):
+        return Attribute(
+            value=args[0],
+            attr=args[1].id,
+            ctx=Load()
+        )
+
     def subscription(self, args):
         return Subscript(
             value=args[0],
@@ -186,6 +193,10 @@ class ToAst(Transformer):
     
     def args_data(self, args):
         return [*args[0], arg(args[1].id)]
+    
+    def inherit_data(self, inherits):
+        if not isinstance(inherits[0], list): inherits[0] = [inherits[0]]
+        return [*inherits[0], inherits[1]]
 
     def if_block(self, args):
         return If(
@@ -213,6 +224,21 @@ class ToAst(Transformer):
             ), 
             body=args[4]
         )
+
+    def class_block(self, args):
+        return ClassDef(
+            name=args[1].id,
+            bases=[],
+            body=args[3],
+        )
+
+    def class_in_block(self, args):
+        if not isinstance(args[2], list): args[2] = [args[2]]
+        return ClassDef(
+            name=args[1].id,
+            bases=args[2] if args[2][0] else [],
+            body=args[4],
+        )
     
     def empty(self, args):
         return None
@@ -223,22 +249,8 @@ class ToAst(Transformer):
     def NAME(self, args):
         return Name(id = args.value, ctx = Load())
     
+    def PASS(self, args):
+        return Pass()
+    
     def BREAK(self, args):
         return Break()
-    
-if __name__ == "__main__":
-    path_py = sys.argv[1]
-    if not path_py.endswith('.py'):
-        raise Exception(f"parse: argument not a valid python file")
-    
-    prog_py = ""
-    with open(path_py) as file: 
-        for line in file.read().split('\n'):
-            prog_py += line.split('#', 1)[0] + "\n"
-    
-    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "grammar.lark"), 'r') as file_lark: 
-        prog_lark = file_lark.read()
-    parser = Lark(prog_lark, parser="lalr", start="module", transformer=ToAst(), postlex=PyIndenter())
-    
-    tree = parse(prog_py)
-    tree = parser.parse(prog_py)
